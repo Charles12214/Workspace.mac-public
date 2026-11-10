@@ -55,6 +55,23 @@ public final class AppState: ObservableObject {
         didSet { UserDefaults.standard.set(appViewMode.rawValue, forKey: "appViewMode") }
     }
     
+    // Background Update Check State
+    @Published public var availableUpdate: AppUpdateInfo? = nil
+    @Published public var dismissedUpdateTags: Set<String> = []
+    
+    public func dismissUpdate(_ tag: String) {
+        dismissedUpdateTags.insert(tag)
+        UserDefaults.standard.set(Array(dismissedUpdateTags), forKey: "dismissedUpdateTags")
+    }
+    
+    public func checkForUpdates() {
+        UpdateCheckerService.shared.checkForUpdates { [weak self] update in
+            DispatchQueue.main.async {
+                self?.availableUpdate = update
+            }
+        }
+    }
+    
     // Temporary overlay sidebar state when viewing app in Essentials or Minimalist mode
     @Published public var isManualSidebarOpenInApp: Bool = false
     
@@ -124,6 +141,16 @@ public final class AppState: ObservableObject {
         }
         
         applyAppearanceToWindow()
+        
+        // Load dismissed updates
+        if let savedDismissed = UserDefaults.standard.stringArray(forKey: "dismissedUpdateTags") {
+            self.dismissedUpdateTags = Set(savedDismissed)
+        }
+        
+        // Asynchronously check for releases on GitHub after a brief launch delay
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in
+            self?.checkForUpdates()
+        }
     }
     
     public var effectiveColorScheme: ColorScheme {

@@ -339,6 +339,50 @@ public struct SettingsView: View {
                     .padding(16)
                     .liquidGlass(cornerRadius: 14)
                     
+                    // App Updates Section
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("APP UPDATES")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(.secondary)
+                        
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Workspace.mac v\(UpdateCheckerService.shared.currentVersion)")
+                                    .font(.system(size: 12.5, weight: .semibold))
+                                Text(state.availableUpdate != nil ? "New update available!" : "Up to date with GitHub Releases.")
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(state.availableUpdate != nil ? Color(hex: "D97706") : .secondary)
+                            }
+                            
+                            Spacer()
+                            
+                            if let update = state.availableUpdate {
+                                Button("Download \(update.versionName)") {
+                                    NSWorkspace.shared.open(update.releaseUrl)
+                                }
+                                .font(.system(size: 11.5, weight: .semibold))
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 5)
+                                .background(Color(hex: "D97706"))
+                                .foregroundStyle(.white)
+                                .clipShape(Capsule())
+                                .buttonStyle(.plain)
+                            } else {
+                                Button("Check for Updates") {
+                                    state.checkForUpdates()
+                                }
+                                .font(.system(size: 11.5, weight: .medium))
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 5)
+                                .background(Color.primary.opacity(0.06))
+                                .clipShape(Capsule())
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                    .padding(16)
+                    .liquidGlass(cornerRadius: 14)
+                    
                     // Reset / Re-run Setup Wizard
                     VStack(alignment: .leading, spacing: 10) {
                         Text("SETUP WIZARD")

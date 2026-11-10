@@ -9,28 +9,44 @@ public struct ContentView: View {
     public init() {}
     
     public var body: some View {
-        Group {
-            if !state.hasCompletedSetup {
-                OnboardingView(state: state)
-                    .background(VisualEffectBackground().ignoresSafeArea())
-            } else if let app = state.selectedApp {
-                // MARK: - App View Container (Everything, Essentials [Default], Minimalist ["At a glance"])
-                WorkspaceAppContainer(app: app, state: state, showingSettings: $showingSettings)
-                    .id(app.id)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                // MARK: - Home Launcher View with Sidebar
-                HStack(spacing: 0) {
-                    SidebarView(state: state, showingSettings: $showingSettings)
-                    
-                    Divider().opacity(0.2)
-                    
-                    HomeView(state: state, greetingManager: greetingManager)
+        ZStack(alignment: .top) {
+            Group {
+                if !state.hasCompletedSetup {
+                    OnboardingView(state: state)
+                        .background(VisualEffectBackground().ignoresSafeArea())
+                } else if let app = state.selectedApp {
+                    // MARK: - App View Container (Everything, Essentials [Default], Minimalist ["At a glance"])
+                    WorkspaceAppContainer(app: app, state: state, showingSettings: $showingSettings)
+                        .id(app.id)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    // MARK: - Home Launcher View with Sidebar
+                    HStack(spacing: 0) {
+                        SidebarView(state: state, showingSettings: $showingSettings)
+                        
+                        Divider().opacity(0.2)
+                        
+                        HomeView(state: state, greetingManager: greetingManager)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
+                    .background(
+                        colorScheme == .dark ? Color.black : Color.white
+                    )
                 }
-                .background(
-                    colorScheme == .dark ? Color.black : Color.white
-                )
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            
+            // Yellow / Amber update banner at top of window
+            if let update = state.availableUpdate, !state.dismissedUpdateTags.contains(update.tagName) {
+                UpdateBannerView(update: update, onDismiss: {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                        state.dismissUpdate(update.tagName)
+                    }
+                })
+                .transition(.asymmetric(insertion: .move(edge: .top).combined(with: .opacity),
+                                        removal: .move(edge: .top).combined(with: .opacity)))
+                .padding(.top, 14)
+                .zIndex(999)
             }
         }
         .preferredColorScheme(state.effectiveColorScheme)
