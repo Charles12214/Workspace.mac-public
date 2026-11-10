@@ -136,20 +136,7 @@ public enum SubscriptionTier: String, CaseIterable, Codable, Identifiable, Senda
     }
     
     public func summaryText(name: String) -> String {
-        switch self {
-        case .aiPlus:
-            return "\(name), you have Google AI Plus! Enjoy enhanced Gemini integration across Workspace."
-        case .aiPro:
-            return "\(name), you have Google AI Pro! Full Gemini Workspace integration enabled."
-        case .aiUltra:
-            return "\(name), you have Google AI Ultra! The most capable Gemini models unlocked across Workspace."
-        case .workspaceEnterprise:
-            return "\(name), you have Workspace Enterprise! Complete enterprise tools unlocked."
-        case .workspaceBusiness:
-            return "\(name), you have Workspace Business! Professional team collaboration ready."
-        case .standard:
-            return "\(name), your standard Google account is ready!"
-        }
+        return "\(name), your Google Workspace is ready!"
     }
 }
 

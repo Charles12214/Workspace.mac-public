@@ -146,18 +146,16 @@ public struct SidebarView: View {
                 LazyVStack(spacing: 2) {
                     ForEach(state.filteredApps) { app in
                         SidebarItemRow(
-                            title: app.name,
-                            subtitle: app.category.rawValue,
-                            iconSymbol: app.iconSymbol,
-                            iconColor: app.primaryColor,
+                            app: app,
                             isSelected: state.selectedAppId == app.id,
-                            isPinned: app.isPinned,
-                            showPin: true,
                             onSelect: {
                                 state.launchApp(app)
                             },
                             onTogglePin: {
                                 state.togglePin(appId: app.id)
+                            },
+                            onOpenSeparate: {
+                                state.openSeparateWindow(for: app)
                             }
                         )
                     }
@@ -219,12 +217,21 @@ public struct SidebarView: View {
                                     )
                                     .frame(width: 36, height: 36)
                                 
-                                Image(systemName: app.iconSymbol)
-                                    .font(.system(size: 15))
-                                    .foregroundStyle(app.primaryColor)
+                                GoogleAppIconView(appId: app.id, size: 20)
                             }
                         }
                         .buttonStyle(.plain)
+                        .onDrag {
+                            NSItemProvider(object: app.id as NSString)
+                        }
+                        .contextMenu {
+                            Button("Open in Separate Window") {
+                                state.openSeparateWindow(for: app)
+                            }
+                            Button(app.isPinned ? "Unpin App" : "Pin App to Dashboard") {
+                                state.togglePin(appId: app.id)
+                            }
+                        }
                         .help(app.name)
                     }
                 }
@@ -248,38 +255,26 @@ public struct SidebarView: View {
 
 // MARK: - Sidebar Row Item
 public struct SidebarItemRow: View {
-    public let title: String
-    public let subtitle: String
-    public let iconSymbol: String
-    public let iconColor: Color
+    public let app: WorkspaceAppItem
     public let isSelected: Bool
-    public let isPinned: Bool
-    public let showPin: Bool
     public let onSelect: () -> Void
     public let onTogglePin: () -> Void
+    public let onOpenSeparate: () -> Void
     
     @State private var isHovered = false
     
     public init(
-        title: String,
-        subtitle: String,
-        iconSymbol: String,
-        iconColor: Color,
+        app: WorkspaceAppItem,
         isSelected: Bool,
-        isPinned: Bool,
-        showPin: Bool,
         onSelect: @escaping () -> Void,
-        onTogglePin: @escaping () -> Void
+        onTogglePin: @escaping () -> Void,
+        onOpenSeparate: @escaping () -> Void
     ) {
-        self.title = title
-        self.subtitle = subtitle
-        self.iconSymbol = iconSymbol
-        self.iconColor = iconColor
+        self.app = app
         self.isSelected = isSelected
-        self.isPinned = isPinned
-        self.showPin = showPin
         self.onSelect = onSelect
         self.onTogglePin = onTogglePin
+        self.onOpenSeparate = onOpenSeparate
     }
     
     public var body: some View {
@@ -288,21 +283,19 @@ public struct SidebarItemRow: View {
                 // App Icon Container
                 ZStack {
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(iconColor.opacity(isSelected ? 0.25 : 0.14))
+                        .fill(app.primaryColor.opacity(isSelected ? 0.25 : 0.14))
                         .frame(width: 28, height: 28)
                     
-                    Image(systemName: iconSymbol)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(iconColor)
+                    GoogleAppIconView(appId: app.id, size: 18)
                 }
                 
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(title)
+                    Text(app.name)
                         .font(.system(size: 12.5, weight: isSelected ? .semibold : .regular))
                         .foregroundStyle(isSelected ? Color.primary : Color.primary.opacity(0.9))
                         .lineLimit(1)
                     
-                    Text(subtitle)
+                    Text(app.category.rawValue)
                         .font(.system(size: 10))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -310,15 +303,27 @@ public struct SidebarItemRow: View {
                 
                 Spacer()
                 
-                // Pin button
-                if showPin && (isPinned || isHovered) {
-                    Button(action: onTogglePin) {
-                        Image(systemName: isPinned ? "pin.fill" : "pin")
-                            .font(.system(size: 10))
-                            .foregroundStyle(isPinned ? Color(hex: "F4B400") : Color.secondary)
-                            .padding(4)
+                // Hover actions: Separate Window & Pin
+                if isHovered || app.isPinned {
+                    HStack(spacing: 2) {
+                        Button(action: onOpenSeparate) {
+                            Image(systemName: "arrow.up.forward.app")
+                                .font(.system(size: 10))
+                                .foregroundStyle(Color.secondary)
+                                .padding(4)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Open in Separate Window")
+                        
+                        Button(action: onTogglePin) {
+                            Image(systemName: app.isPinned ? "pin.fill" : "pin")
+                                .font(.system(size: 10))
+                                .foregroundStyle(app.isPinned ? Color(hex: "F4B400") : Color.secondary)
+                                .padding(4)
+                        }
+                        .buttonStyle(.plain)
+                        .help(app.isPinned ? "Unpin" : "Pin")
                     }
-                    .buttonStyle(.plain)
                 }
             }
             .padding(.horizontal, 8)
@@ -340,6 +345,17 @@ public struct SidebarItemRow: View {
             )
         }
         .buttonStyle(.plain)
+        .onDrag {
+            NSItemProvider(object: app.id as NSString)
+        }
+        .contextMenu {
+            Button("Open in Separate Window") {
+                onOpenSeparate()
+            }
+            Button(app.isPinned ? "Unpin App" : "Pin App to Dashboard") {
+                onTogglePin()
+            }
+        }
         .onHover { h in
             withAnimation(.easeInOut(duration: 0.12)) {
                 isHovered = h

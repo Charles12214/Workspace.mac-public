@@ -319,7 +319,7 @@ public final class AppState: ObservableObject {
                 name: "NotebookLM",
                 category: .intelligence,
                 appDescription: "Personalized AI research assistant grounded in your notes and sources.",
-                urlString: "https://notebooklm.google",
+                urlString: "https://notebooklm.google.com",
                 newDocUrlString: nil,
                 iconSymbol: "book.pages.fill",
                 colorHex: "1A73E8",
@@ -445,6 +445,21 @@ public final class AppState: ObservableObject {
             }
             persistAppData()
         }
+    }
+    
+    public func setPinned(appId: String, pinned: Bool) {
+        if let idx = apps.firstIndex(where: { $0.id == appId }) {
+            if apps[idx].isPinned != pinned {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                    apps[idx].isPinned = pinned
+                }
+                persistAppData()
+            }
+        }
+    }
+    
+    public func openSeparateWindow(for app: WorkspaceAppItem) {
+        StandaloneWindowManager.shared.openWindow(for: app, userEmail: userProfile.email)
     }
     
     public func goHome() {

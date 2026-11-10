@@ -341,13 +341,46 @@ public struct WorkspaceAppContainer: View {
             }
             .background(RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(0.04)))
             
+            // Clickable Zoom In / Out (+ / -) Controls
+            HStack(spacing: 2) {
+                Button(action: { state.zoomOut() }) {
+                    Image(systemName: "minus")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(Color.primary)
+                        .frame(width: 22, height: 22)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("Zoom Out (Cmd -)")
+                
+                Button(action: { state.resetZoom() }) {
+                    Text("\(Int((state.activeWebView?.pageZoom ?? 1.0) * 100))%")
+                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 3)
+                }
+                .buttonStyle(.plain)
+                .help("Reset Zoom to 100% (Cmd 0)")
+                
+                Button(action: { state.zoomIn() }) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(Color.primary)
+                        .frame(width: 22, height: 22)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("Zoom In (Cmd +)")
+            }
+            .padding(.horizontal, 4)
+            .padding(.vertical, 2)
+            .background(Capsule().fill(Color.primary.opacity(0.04)))
+            
             Spacer()
             
             // App Title & Icon in Center
             HStack(spacing: 7) {
-                Image(systemName: app.iconSymbol)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(app.primaryColor)
+                GoogleAppIconView(appId: app.id, size: 16)
                 
                 Text(app.name)
                     .font(.system(size: 13, weight: .semibold, design: .rounded))
@@ -362,6 +395,16 @@ public struct WorkspaceAppContainer: View {
             .background(Capsule().fill(Color.primary.opacity(0.04)))
             
             Spacer()
+            
+            // MARK: - Open in Separate Window Button
+            Button(action: { state.openSeparateWindow(for: app) }) {
+                Image(systemName: "arrow.up.forward.app")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .padding(6)
+            }
+            .buttonStyle(.plain)
+            .help("Open \(app.name) in Separate Window")
             
             // MARK: - View Mode Switcher (Everything, Essentials, Minimalist)
             HStack(spacing: 2) {
@@ -446,9 +489,7 @@ public struct WorkspaceAppContainer: View {
             
             // App Icon & Name
             HStack(spacing: 6) {
-                Image(systemName: app.iconSymbol)
-                    .font(.system(size: 12))
-                    .foregroundStyle(app.primaryColor)
+                GoogleAppIconView(appId: app.id, size: 14)
                 Text(app.name)
                     .font(.system(size: 12, weight: .semibold, design: .rounded))
             }

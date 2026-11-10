@@ -5,6 +5,7 @@ public struct HomeView: View {
     @ObservedObject var state: AppState
     @ObservedObject var greetingManager: GreetingManager
     @Environment(\.colorScheme) private var colorScheme
+    @State private var isPinDropTargeted: Bool = false
     
     private let geminiGradient = LinearGradient(
         colors: [
@@ -135,7 +136,8 @@ public struct HomeView: View {
                                         app: app,
                                         hideTitle: state.hideTileTitles,
                                         onLaunch: { state.launchApp(app) },
-                                        onTogglePin: { state.togglePin(appId: app.id) }
+                                        onTogglePin: { state.togglePin(appId: app.id) },
+                                        onOpenSeparate: { state.openSeparateWindow(for: app) }
                                     )
                                 }
                             }
@@ -145,12 +147,20 @@ public struct HomeView: View {
                     }
                 }
                 
-                // MARK: - Pinned Apps Section
+                // MARK: - Pinned Apps Section (Drop Target for Drag & Drop Pinning)
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
-                        Text("Pinned Apps")
-                            .font(.system(size: 15, weight: .bold, design: .rounded))
-                            .foregroundStyle(.primary)
+                        HStack(spacing: 6) {
+                            Text("Pinned Apps")
+                                .font(.system(size: 15, weight: .bold, design: .rounded))
+                                .foregroundStyle(.primary)
+                            
+                            if isPinDropTargeted {
+                                Text("• Drop to Pin!")
+                                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                                    .foregroundStyle(Color(hex: "1A73E8"))
+                            }
+                        }
                         
                         Spacer()
                         
@@ -161,40 +171,69 @@ public struct HomeView: View {
                         }
                     }
                     
-                    if state.pinnedApps.isEmpty {
-                        HStack(spacing: 12) {
-                            Image(systemName: "pin")
-                                .font(.system(size: 16))
-                                .foregroundStyle(.secondary)
-                            
-                            Text("Pin your favorite apps from the sidebar to access them quickly here.")
-                                .font(.system(size: 13, weight: .medium))
-                                .foregroundStyle(.secondary)
-                            
-                            Spacer()
+                    ZStack {
+                        if state.pinnedApps.isEmpty {
+                            HStack(spacing: 12) {
+                                Image(systemName: isPinDropTargeted ? "arrow.down.circle.fill" : "pin")
+                                    .font(.system(size: 16))
+                                    .foregroundStyle(isPinDropTargeted ? Color(hex: "1A73E8") : .secondary)
+                                
+                                Text(isPinDropTargeted ? "Release to pin app to your dashboard!" : "Drag & drop apps here, or pin from the sidebar to access them quickly.")
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundStyle(isPinDropTargeted ? Color(hex: "1A73E8") : .secondary)
+                                
+                                Spacer()
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 16)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .fill(isPinDropTargeted ? Color(hex: "1A73E8").opacity(0.12) : Color.primary.opacity(0.03))
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .stroke(
+                                        isPinDropTargeted ? Color(hex: "1A73E8") : Color.primary.opacity(0.06),
+                                        style: StrokeStyle(lineWidth: isPinDropTargeted ? 2 : 1, dash: isPinDropTargeted ? [6, 4] : [])
+                                    )
+                            )
+                        } else {
+                            LazyVGrid(columns: gridColumns, spacing: 12) {
+                                ForEach(state.pinnedApps) { app in
+                                    ModernQuarterIconTile(
+                                        app: app,
+                                        hideTitle: state.hideTileTitles,
+                                        onLaunch: { state.launchApp(app) },
+                                        onTogglePin: { state.togglePin(appId: app.id) },
+                                        onOpenSeparate: { state.openSeparateWindow(for: app) }
+                                    )
+                                }
+                            }
+                            .padding(isPinDropTargeted ? 8 : 0)
+                            .background(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .fill(isPinDropTargeted ? Color(hex: "1A73E8").opacity(0.08) : Color.clear)
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .stroke(
+                                        isPinDropTargeted ? Color(hex: "1A73E8") : Color.clear,
+                                        style: StrokeStyle(lineWidth: 2, dash: [6, 4])
+                                    )
+                            )
+                            .animation(.spring(response: 0.38, dampingFraction: 0.78), value: state.hideTileTitles)
                         }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 14)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(Color.primary.opacity(0.03))
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .stroke(Color.primary.opacity(0.06), lineWidth: 1)
-                        )
-                    } else {
-                        LazyVGrid(columns: gridColumns, spacing: 12) {
-                            ForEach(state.pinnedApps) { app in
-                                ModernQuarterIconTile(
-                                    app: app,
-                                    hideTitle: state.hideTileTitles,
-                                    onLaunch: { state.launchApp(app) },
-                                    onTogglePin: { state.togglePin(appId: app.id) }
-                                )
+                    }
+                    .onDrop(of: [.plainText, .text], isTargeted: $isPinDropTargeted) { providers in
+                        guard let provider = providers.first else { return false }
+                        _ = provider.loadObject(ofClass: String.self) { string, _ in
+                            if let appId = string {
+                                DispatchQueue.main.async {
+                                    state.setPinned(appId: appId, pinned: true)
+                                }
                             }
                         }
-                        .animation(.spring(response: 0.38, dampingFraction: 0.78), value: state.hideTileTitles)
+                        return true
                     }
                 }
                 
@@ -217,6 +256,7 @@ public struct ModernQuarterIconTile: View {
     public let hideTitle: Bool
     public let onLaunch: () -> Void
     public let onTogglePin: () -> Void
+    public let onOpenSeparate: (() -> Void)?
     
     @State private var isHovered = false
     
@@ -224,12 +264,14 @@ public struct ModernQuarterIconTile: View {
         app: WorkspaceAppItem,
         hideTitle: Bool,
         onLaunch: @escaping () -> Void,
-        onTogglePin: @escaping () -> Void
+        onTogglePin: @escaping () -> Void,
+        onOpenSeparate: (() -> Void)? = nil
     ) {
         self.app = app
         self.hideTitle = hideTitle
         self.onLaunch = onLaunch
         self.onTogglePin = onTogglePin
+        self.onOpenSeparate = onOpenSeparate
     }
     
     public var body: some View {
@@ -249,12 +291,10 @@ public struct ModernQuarterIconTile: View {
                             )
                         )
                     
-                    // Centered App Icon
+                    // Centered Real App Icon
                     VStack {
                         Spacer()
-                        Image(systemName: app.iconSymbol)
-                            .font(.system(size: 26, weight: .semibold))
-                            .foregroundStyle(app.primaryColor)
+                        GoogleAppIconView(appId: app.id, size: 30)
                         Spacer()
                     }
                     .frame(maxWidth: .infinity)
@@ -297,19 +337,14 @@ public struct ModernQuarterIconTile: View {
                             )
                         )
                     
-                    // Enlarged icon in bottom right corner (quarter preview watermark)
-                    // Placed via GeometryReader so it never affects the top layout or text alignment
-                    // Features a playful "Peek out" animation on hover (angles up & slides into view)
+                    // Enlarged real icon in bottom right corner (quarter preview watermark)
                     GeometryReader { geo in
-                        Image(systemName: app.iconSymbol)
-                            .font(.system(size: 78, weight: .bold))
-                            .foregroundStyle(
-                                app.primaryColor.opacity(isHovered ? 0.45 : 0.22)
-                            )
-                            .rotationEffect(.degrees(isHovered ? -14 : 0))
-                            .offset(x: isHovered ? -12 : 0, y: isHovered ? -12 : 0)
+                        GoogleAppIconView(appId: app.id, size: 68)
+                            .opacity(isHovered ? 0.45 : 0.20)
+                            .rotationEffect(.degrees(isHovered ? -12 : 0))
+                            .offset(x: isHovered ? -10 : 0, y: isHovered ? -10 : 0)
                             .scaleEffect(isHovered ? 1.06 : 1.0)
-                            .position(x: geo.size.width + 12, y: geo.size.height + 12)
+                            .position(x: geo.size.width + 10, y: geo.size.height + 10)
                             .allowsHitTesting(false)
                             .animation(.spring(response: 0.38, dampingFraction: 0.65), value: isHovered)
                     }
@@ -318,16 +353,20 @@ public struct ModernQuarterIconTile: View {
                     // Title and Pin Controls - Perfectly anchored at top
                     VStack(alignment: .leading, spacing: 0) {
                         HStack(alignment: .top) {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(app.name)
-                                    .font(.system(size: 14.5, weight: .bold, design: .rounded))
-                                    .foregroundStyle(Color.primary)
-                                    .lineLimit(1)
+                            HStack(spacing: 8) {
+                                GoogleAppIconView(appId: app.id, size: 20)
                                 
-                                Text(app.category.rawValue)
-                                    .font(.system(size: 10.5))
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(app.name)
+                                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                                        .foregroundStyle(Color.primary)
+                                        .lineLimit(1)
+                                    
+                                    Text(app.category.rawValue)
+                                        .font(.system(size: 10))
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                }
                             }
                             
                             Spacer()
@@ -340,6 +379,7 @@ public struct ModernQuarterIconTile: View {
                                     .padding(4)
                             }
                             .buttonStyle(.plain)
+                            .help(app.isPinned ? "Unpin App" : "Pin App to Dashboard")
                         }
                         
                         Spacer()
@@ -362,6 +402,19 @@ public struct ModernQuarterIconTile: View {
             }
         }
         .buttonStyle(.plain)
+        .onDrag {
+            NSItemProvider(object: app.id as NSString)
+        }
+        .contextMenu {
+            if let onOpenSeparate = onOpenSeparate {
+                Button(action: onOpenSeparate) {
+                    Label("Open in Separate Window", systemImage: "arrow.up.forward.app")
+                }
+            }
+            Button(action: onTogglePin) {
+                Label(app.isPinned ? "Unpin App" : "Pin App to Dashboard", systemImage: app.isPinned ? "pin.slash" : "pin")
+            }
+        }
         .onHover { h in
             withAnimation(.spring(response: 0.38, dampingFraction: 0.65)) {
                 isHovered = h
