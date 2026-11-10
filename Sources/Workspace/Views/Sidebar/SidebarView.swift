@@ -207,22 +207,25 @@ public struct SidebarView: View {
             ScrollView(.vertical, showsIndicators: false) {
                 LazyVStack(spacing: 6) {
                     ForEach(state.apps) { app in
-                        Button(action: { state.launchApp(app) }) {
-                            ZStack {
-                                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                    .fill(
-                                        state.selectedAppId == app.id
-                                            ? app.primaryColor.opacity(0.25)
-                                            : Color.primary.opacity(0.04)
-                                    )
-                                    .frame(width: 36, height: 36)
-                                
-                                GoogleAppIconView(appId: app.id, size: 20)
-                            }
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .fill(
+                                    state.selectedAppId == app.id
+                                        ? app.primaryColor.opacity(0.25)
+                                        : Color.primary.opacity(0.04)
+                                )
+                                .frame(width: 36, height: 36)
+                            
+                            GoogleAppIconView(appId: app.id, size: 20)
                         }
-                        .buttonStyle(.plain)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            state.launchApp(app)
+                        }
                         .onDrag {
-                            NSItemProvider(object: app.id as NSString)
+                            let provider = NSItemProvider(object: app.id as NSString)
+                            provider.suggestedName = app.name
+                            return provider
                         }
                         .contextMenu {
                             Button("Open in Separate Window") {
@@ -278,75 +281,78 @@ public struct SidebarItemRow: View {
     }
     
     public var body: some View {
-        Button(action: onSelect) {
-            HStack(spacing: 10) {
-                // App Icon Container
-                ZStack {
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(app.primaryColor.opacity(isSelected ? 0.25 : 0.14))
-                        .frame(width: 28, height: 28)
-                    
-                    GoogleAppIconView(appId: app.id, size: 18)
-                }
+        HStack(spacing: 10) {
+            // App Icon Container
+            ZStack {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(app.primaryColor.opacity(isSelected ? 0.25 : 0.14))
+                    .frame(width: 28, height: 28)
                 
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(app.name)
-                        .font(.system(size: 12.5, weight: isSelected ? .semibold : .regular))
-                        .foregroundStyle(isSelected ? Color.primary : Color.primary.opacity(0.9))
-                        .lineLimit(1)
-                    
-                    Text(app.category.rawValue)
-                        .font(.system(size: 10))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
+                GoogleAppIconView(appId: app.id, size: 18)
+            }
+            
+            VStack(alignment: .leading, spacing: 1) {
+                Text(app.name)
+                    .font(.system(size: 12.5, weight: isSelected ? .semibold : .regular))
+                    .foregroundStyle(isSelected ? Color.primary : Color.primary.opacity(0.9))
+                    .lineLimit(1)
                 
-                Spacer()
-                
-                // Hover actions: Separate Window & Pin
-                if isHovered || app.isPinned {
-                    HStack(spacing: 2) {
-                        Button(action: onOpenSeparate) {
-                            Image(systemName: "arrow.up.forward.app")
-                                .font(.system(size: 10))
-                                .foregroundStyle(Color.secondary)
-                                .padding(4)
-                        }
-                        .buttonStyle(.plain)
-                        .help("Open in Separate Window")
-                        
-                        Button(action: onTogglePin) {
-                            Image(systemName: app.isPinned ? "pin.fill" : "pin")
-                                .font(.system(size: 10))
-                                .foregroundStyle(app.isPinned ? Color(hex: "F4B400") : Color.secondary)
-                                .padding(4)
-                        }
-                        .buttonStyle(.plain)
-                        .help(app.isPinned ? "Unpin" : "Pin")
+                Text(app.category.rawValue)
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            
+            Spacer()
+            
+            // Hover actions: Separate Window & Pin
+            if isHovered || app.isPinned {
+                HStack(spacing: 2) {
+                    Button(action: onOpenSeparate) {
+                        Image(systemName: "arrow.up.forward.app")
+                            .font(.system(size: 10))
+                            .foregroundStyle(Color.secondary)
+                            .padding(4)
                     }
+                    .buttonStyle(.plain)
+                    .help("Open in Separate Window")
+                    
+                    Button(action: onTogglePin) {
+                        Image(systemName: app.isPinned ? "pin.fill" : "pin")
+                            .font(.system(size: 10))
+                            .foregroundStyle(app.isPinned ? Color(hex: "F4B400") : Color.secondary)
+                            .padding(4)
+                    }
+                    .buttonStyle(.plain)
+                    .help(app.isPinned ? "Unpin" : "Pin")
                 }
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 5)
-            .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(
-                        isSelected
-                            ? Color(hex: "1A73E8").opacity(0.14)
-                            : (isHovered ? Color.primary.opacity(0.06) : Color.clear)
-                    )
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(
-                        isSelected ? Color(hex: "1A73E8").opacity(0.3) : Color.clear,
-                        lineWidth: 1
-                    )
-            )
         }
-        .buttonStyle(.plain)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(
+                    isSelected
+                        ? Color(hex: "1A73E8").opacity(0.14)
+                        : (isHovered ? Color.primary.opacity(0.06) : Color.clear)
+                )
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(
+                    isSelected ? Color(hex: "1A73E8").opacity(0.3) : Color.clear,
+                    lineWidth: 1
+                )
+        )
+        .contentShape(Rectangle())
+        .onTapGesture {
+            onSelect()
+        }
         .onDrag {
-            NSItemProvider(object: app.id as NSString)
+            let provider = NSItemProvider(object: app.id as NSString)
+            provider.suggestedName = app.name
+            return provider
         }
         .contextMenu {
             Button("Open in Separate Window") {

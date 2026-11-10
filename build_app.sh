@@ -12,8 +12,9 @@ sleep 0.5
 
 echo "🔨 Building Workspace for macOS (Release)..."
 export SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk
+BUILD_DIR="/tmp/workspace-build"
 
-swift build -c release -Xswiftc -gnone
+swift build -c release --build-path "$BUILD_DIR"
 
 BINARY_NAME="Workspace"
 APP_NAME="Workspace.mac"
@@ -28,7 +29,7 @@ mkdir -p "${MACOS_DIR}"
 mkdir -p "${RESOURCES_DIR}"
 
 # Copy binary
-cp ".build/release/${BINARY_NAME}" "${MACOS_DIR}/${APP_NAME}"
+cp "${BUILD_DIR}/release/${BINARY_NAME}" "${MACOS_DIR}/${APP_NAME}"
 chmod +x "${MACOS_DIR}/${APP_NAME}"
 
 # Copy icon

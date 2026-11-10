@@ -1,5 +1,51 @@
 import SwiftUI
 import AppKit
+import UniformTypeIdentifiers
+
+// Drop Delegate for Pinned Apps
+public struct PinnedAppsDropDelegate: DropDelegate {
+    @Binding var isTargeted: Bool
+    let onPinApp: (String) -> Void
+    
+    public init(isTargeted: Binding<Bool>, onPinApp: @escaping (String) -> Void) {
+        self._isTargeted = isTargeted
+        self.onPinApp = onPinApp
+    }
+    
+    public func validateDrop(info: DropInfo) -> Bool {
+        return info.hasItemsConforming(to: [.utf8PlainText, .plainText, .text])
+    }
+    
+    public func dropEntered(info: DropInfo) {
+        withAnimation(.easeInOut(duration: 0.15)) {
+            isTargeted = true
+        }
+    }
+    
+    public func dropExited(info: DropInfo) {
+        withAnimation(.easeInOut(duration: 0.15)) {
+            isTargeted = false
+        }
+    }
+    
+    public func performDrop(info: DropInfo) -> Bool {
+        withAnimation(.easeInOut(duration: 0.15)) {
+            isTargeted = false
+        }
+        
+        let providers = info.itemProviders(for: [.utf8PlainText, .plainText, .text])
+        guard let provider = providers.first else { return false }
+        
+        _ = provider.loadObject(ofClass: NSString.self) { string, _ in
+            if let appId = string as? String {
+                DispatchQueue.main.async {
+                    onPinApp(appId)
+                }
+            }
+        }
+        return true
+    }
+}
 
 public struct HomeView: View {
     @ObservedObject var state: AppState
@@ -224,18 +270,21 @@ public struct HomeView: View {
                             .animation(.spring(response: 0.38, dampingFraction: 0.78), value: state.hideTileTitles)
                         }
                     }
-                    .onDrop(of: [.plainText, .text], isTargeted: $isPinDropTargeted) { providers in
-                        guard let provider = providers.first else { return false }
-                        _ = provider.loadObject(ofClass: String.self) { string, _ in
-                            if let appId = string {
-                                DispatchQueue.main.async {
-                                    state.setPinned(appId: appId, pinned: true)
-                                }
-                            }
+                    .contentShape(Rectangle())
+                    .onDrop(
+                        of: [.utf8PlainText, .plainText, .text],
+                        delegate: PinnedAppsDropDelegate(isTargeted: $isPinDropTargeted) { appId in
+                            state.setPinned(appId: appId, pinned: true)
                         }
-                        return true
-                    }
+                    )
                 }
+                .contentShape(Rectangle())
+                .onDrop(
+                    of: [.utf8PlainText, .plainText, .text],
+                    delegate: PinnedAppsDropDelegate(isTargeted: $isPinDropTargeted) { appId in
+                        state.setPinned(appId: appId, pinned: true)
+                    }
+                )
                 
                 Spacer(minLength: 20)
             }
@@ -275,7 +324,7 @@ public struct ModernQuarterIconTile: View {
     }
     
     public var body: some View {
-        Button(action: onLaunch) {
+        Group {
             if hideTitle {
                 // MARK: - Compact Shortened Icon-Only Tile
                 ZStack(alignment: .topTrailing) {
@@ -401,9 +450,14 @@ public struct ModernQuarterIconTile: View {
                 .scaleEffect(isHovered ? 1.015 : 1.0)
             }
         }
-        .buttonStyle(.plain)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            onLaunch()
+        }
         .onDrag {
-            NSItemProvider(object: app.id as NSString)
+            let provider = NSItemProvider(object: app.id as NSString)
+            provider.suggestedName = app.name
+            return provider
         }
         .contextMenu {
             if let onOpenSeparate = onOpenSeparate {
