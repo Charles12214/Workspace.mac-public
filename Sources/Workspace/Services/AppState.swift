@@ -59,6 +59,25 @@ public final class AppState: ObservableObject {
     @Published public var availableUpdate: AppUpdateInfo? = nil
     @Published public var dismissedUpdateTags: Set<String> = []
     
+    // Active Web View & Zoom Controls
+    public weak var activeWebView: WKWebView? = nil
+    
+    public func zoomIn() {
+        guard let wv = activeWebView else { return }
+        wv.pageZoom = min(wv.pageZoom + 0.1, 3.0)
+    }
+    
+    public func zoomOut() {
+        guard let wv = activeWebView else { return }
+        wv.pageZoom = max(wv.pageZoom - 0.1, 0.5)
+    }
+    
+    public func resetZoom() {
+        guard let wv = activeWebView else { return }
+        wv.pageZoom = 1.0
+        wv.magnification = 1.0
+    }
+    
     public func dismissUpdate(_ tag: String) {
         dismissedUpdateTags.insert(tag)
         UserDefaults.standard.set(Array(dismissedUpdateTags), forKey: "dismissedUpdateTags")

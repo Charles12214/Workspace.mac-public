@@ -154,7 +154,7 @@ public struct WebKitRepresentable: NSViewRepresentable {
         configuration.websiteDataStore = WKWebsiteDataStore.default()
         configuration.preferences.setValue(true, forKey: "developerExtrasEnabled")
         
-        // Suppress browser upgrade and promo banners via CSS injection (do NOT run on accounts.google.com to preserve security integrity)
+        // Suppress browser upgrade and promo banners via CSS injection + force subpixel font smoothing
         let cssHideScript = """
         if (!window.location.hostname.includes('accounts.google.com')) {
             const style = document.createElement('style');
@@ -167,6 +167,12 @@ public struct WebKitRepresentable: NSViewRepresentable {
                     visibility: hidden !important;
                     height: 0 !important;
                 }
+                * {
+                    -webkit-font-smoothing: subpixel-antialiased !important;
+                }
+                canvas {
+                    image-rendering: -webkit-optimize-contrast !important;
+                }
             `;
             document.documentElement.appendChild(style);
         }
@@ -177,11 +183,7 @@ public struct WebKitRepresentable: NSViewRepresentable {
         let wv = WKWebView(frame: .zero, configuration: configuration)
         wv.navigationDelegate = context.coordinator
         wv.uiDelegate = context.coordinator
-        
-        // Force full Retina backing scale factor for razor-sharp canvas text in Google Docs & Sheets
-        wv.wantsLayer = true
-        wv.layer?.contentsScale = NSScreen.main?.backingScaleFactor ?? 2.0
-        wv.pageZoom = 1.0
+        wv.allowsMagnification = true
         
         // Use genuine macOS desktop Safari user agent (Safari 18.3)
         // Resolves "This browser or app may not be secure" on Google Sign-In
@@ -194,6 +196,7 @@ public struct WebKitRepresentable: NSViewRepresentable {
         
         DispatchQueue.main.async {
             self.webViewOut = wv
+            AppState.shared.activeWebView = wv
         }
         
         return wv

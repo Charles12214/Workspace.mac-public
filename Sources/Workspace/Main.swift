@@ -33,6 +33,29 @@ struct WorkspaceApp: App {
                 }
                 .keyboardShortcut("h", modifiers: [.command, .shift])
             }
+            CommandMenu("View") {
+                Button("Zoom In") {
+                    AppState.shared.zoomIn()
+                }
+                .keyboardShortcut("+", modifiers: [.command])
+                
+                Button("Zoom In (Equal Key)") {
+                    AppState.shared.zoomIn()
+                }
+                .keyboardShortcut("=", modifiers: [.command])
+                
+                Button("Zoom Out") {
+                    AppState.shared.zoomOut()
+                }
+                .keyboardShortcut("-", modifiers: [.command])
+                
+                Divider()
+                
+                Button("Actual Size") {
+                    AppState.shared.resetZoom()
+                }
+                .keyboardShortcut("0", modifiers: [.command])
+            }
         }
     }
 }
