@@ -481,7 +481,7 @@ public final class AppState: ObservableObject {
         }
     }
     
-    private func saveUserProfile() {
+    public func saveUserProfile() {
         if let data = try? JSONEncoder().encode(userProfile) {
             UserDefaults.standard.set(data, forKey: kUserProfileKey)
         }

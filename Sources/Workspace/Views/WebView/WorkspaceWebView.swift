@@ -154,20 +154,22 @@ public struct WebKitRepresentable: NSViewRepresentable {
         configuration.websiteDataStore = WKWebsiteDataStore.default()
         configuration.preferences.setValue(true, forKey: "developerExtrasEnabled")
         
-        // Suppress browser upgrade and "Try Chrome" promo banners via CSS injection
+        // Suppress browser upgrade and promo banners via CSS injection (do NOT run on accounts.google.com to preserve security integrity)
         let cssHideScript = """
-        const style = document.createElement('style');
-        style.type = 'text/css';
-        style.innerHTML = `
-            #push-modal, .gb_Fa, [aria-label*="Try Chrome"], [aria-label*="switch to Chrome"],
-            [aria-label*="supported browser"], .apps-promo-card, .promo-banner, .app-download-banner,
-            div[role="alert"]:has(a[href*="chrome"]), .butterbar-container:has(a[href*="chrome"]) {
-                display: none !important;
-                visibility: hidden !important;
-                height: 0 !important;
-            }
-        `;
-        document.documentElement.appendChild(style);
+        if (!window.location.hostname.includes('accounts.google.com')) {
+            const style = document.createElement('style');
+            style.type = 'text/css';
+            style.innerHTML = `
+                #push-modal, .gb_Fa, [aria-label*="Try Chrome"], [aria-label*="switch to Chrome"],
+                [aria-label*="supported browser"], .apps-promo-card, .promo-banner, .app-download-banner,
+                div[role="alert"]:has(a[href*="chrome"]), .butterbar-container:has(a[href*="chrome"]) {
+                    display: none !important;
+                    visibility: hidden !important;
+                    height: 0 !important;
+                }
+            `;
+            document.documentElement.appendChild(style);
+        }
         """
         let userScript = WKUserScript(source: cssHideScript, injectionTime: .atDocumentEnd, forMainFrameOnly: false)
         configuration.userContentController.addUserScript(userScript)
@@ -176,9 +178,9 @@ public struct WebKitRepresentable: NSViewRepresentable {
         wv.navigationDelegate = context.coordinator
         wv.uiDelegate = context.coordinator
         
-        // Use modern macOS Chrome user agent so Google Workspace treats it as fully supported Chrome
-        // Eliminates: "This browser version is no longer supported" AND "Try the chrome browser"
-        wv.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36"
+        // Use genuine macOS desktop Safari user agent (Safari 18.3)
+        // Resolves "This browser or app may not be secure" on Google Sign-In
+        wv.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.3 Safari/605.1.15"
         
         context.coordinator.setupObservers(for: wv)
         
@@ -237,6 +239,14 @@ public struct WebKitRepresentable: NSViewRepresentable {
         @MainActor
         public func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping @MainActor (WKNavigationActionPolicy) -> Void) {
             decisionHandler(.allow)
+        }
+        
+        @MainActor
+        public func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
+            if navigationAction.targetFrame == nil {
+                webView.load(navigationAction.request)
+            }
+            return nil
         }
     }
 }

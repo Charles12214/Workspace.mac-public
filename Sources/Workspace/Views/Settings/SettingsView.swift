@@ -187,7 +187,6 @@ public struct SettingsView: View {
                                 HStack(spacing: 8) {
                                     Text(state.userProfile.displayName)
                                         .font(.system(size: 15, weight: .bold))
-                                    AiTierBadgeView(tier: state.userProfile.tier)
                                 }
                                 
                                 Text(state.userProfile.email.isEmpty ? "Local macOS Profile" : state.userProfile.email)
@@ -270,45 +269,19 @@ public struct SettingsView: View {
                                 Image(systemName: "sparkles")
                                     .font(.system(size: 11))
                                     .foregroundStyle(GeminiPalette.blue)
-                                Text("Greeting text: \"What's the groove, **\(state.userProfile.greetingName)**?\"")
-                                    .font(.system(size: 11.5))
+                                HStack {
+                                    Spacer()
+                                    Button("Clear & Reset Profile") {
+                                        state.userProfile = .empty
+                                        state.saveUserProfile()
+                                    }
+                                    .font(.system(size: 11, weight: .medium))
+                                    .buttonStyle(.plain)
                                     .foregroundStyle(.secondary)
+                                }
+                                .padding(.top, 4)
                             }
-                            .padding(.top, 2)
                         }
-                        
-                        Divider().opacity(0.3)
-                        
-                        // Workspace Badge & AI Tier Selection
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack(spacing: 8) {
-                                Image(systemName: "sparkles")
-                                    .font(.system(size: 13))
-                                    .foregroundStyle(GeminiPalette.linearGradient)
-                                
-                                Text("Workspace Plan & AI Badge")
-                                    .font(.system(size: 13, weight: .bold))
-                                
-                                Spacer()
-                                
-                                AiTierBadgeView(tier: state.userProfile.tier)
-                            }
-                            
-                            Picker("", selection: $state.userProfile.tier) {
-                                Text("Google AI Pro").tag(SubscriptionTier.aiPro)
-                                Text("Google AI Plus").tag(SubscriptionTier.aiPlus)
-                                Text("Google AI Ultra").tag(SubscriptionTier.aiUltra)
-                                Text("Personal (Free)").tag(SubscriptionTier.standard)
-                            }
-                            .pickerStyle(.segmented)
-                            
-                            Text(state.userProfile.tier.summaryText(name: state.userProfile.greetingName))
-                                .font(.system(size: 11))
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        .padding(12)
-                        .background(RoundedRectangle(cornerRadius: 10).fill(Color.primary.opacity(0.03)))
                     }
                     .padding(16)
                     .liquidGlass(cornerRadius: 14)

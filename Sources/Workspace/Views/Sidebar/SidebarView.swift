@@ -52,10 +52,6 @@ public struct SidebarView: View {
                                     .font(.system(size: 10))
                                     .foregroundStyle(.secondary)
                                     .lineLimit(1)
-                                
-                                // AI Plus / Pro / Ultra Pill Badge
-                                AiTierBadgeView(tier: state.userProfile.tier)
-                                    .padding(.top, 1)
                             }
                         }
                     }
