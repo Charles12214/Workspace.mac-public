@@ -154,7 +154,10 @@ public struct WebKitRepresentable: NSViewRepresentable {
         configuration.websiteDataStore = WKWebsiteDataStore.default()
         configuration.preferences.setValue(true, forKey: "developerExtrasEnabled")
         
-        // Suppress browser upgrade and promo banners via CSS injection + force subpixel font smoothing
+        // Match exact native Safari 27.2 User-Agent on macOS
+        configuration.applicationNameForUserAgent = "Version/27.2 Safari/605.1.15"
+        
+        // Suppress browser upgrade and promo banners via CSS injection (do NOT run on accounts.google.com)
         let cssHideScript = """
         if (!window.location.hostname.includes('accounts.google.com')) {
             const style = document.createElement('style');
@@ -167,12 +170,6 @@ public struct WebKitRepresentable: NSViewRepresentable {
                     visibility: hidden !important;
                     height: 0 !important;
                 }
-                * {
-                    -webkit-font-smoothing: subpixel-antialiased !important;
-                }
-                canvas {
-                    image-rendering: -webkit-optimize-contrast !important;
-                }
             `;
             document.documentElement.appendChild(style);
         }
@@ -180,14 +177,13 @@ public struct WebKitRepresentable: NSViewRepresentable {
         let userScript = WKUserScript(source: cssHideScript, injectionTime: .atDocumentEnd, forMainFrameOnly: false)
         configuration.userContentController.addUserScript(userScript)
         
-        let wv = WKWebView(frame: .zero, configuration: configuration)
+        // Initialize with real screen frame so WebKit and Google Docs initialize at full Retina resolution
+        let initialFrame = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1400, height: 900)
+        let wv = WKWebView(frame: initialFrame, configuration: configuration)
+        wv.autoresizingMask = [.width, .height]
         wv.navigationDelegate = context.coordinator
         wv.uiDelegate = context.coordinator
         wv.allowsMagnification = true
-        
-        // Use genuine macOS desktop Safari user agent (Safari 18.3)
-        // Resolves "This browser or app may not be secure" on Google Sign-In
-        wv.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.3 Safari/605.1.15"
         
         context.coordinator.setupObservers(for: wv)
         
