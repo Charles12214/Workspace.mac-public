@@ -1,0 +1,582 @@
+import SwiftUI
+import Combine
+import AppKit
+import WebKit
+
+@MainActor
+public final class AppState: ObservableObject {
+    public static let shared = AppState()
+    
+    // MARK: - App Persistence Keys
+    private let kRecentlyUsedKey = "Workspace_RecentlyUsedApps"
+    private let kPinnedAppsKey = "Workspace_PinnedApps"
+    private let kUserProfileKey = "Workspace_UserProfile"
+    private let kAppearanceModeKey = "Workspace_AppearanceMode"
+    private let kHasCompletedSetupKey = "Workspace_HasCompletedSetup"
+    private let kHideTileTitlesKey = "Workspace_HideTileTitles"
+    private let kIsSidebarCollapsedKey = "Workspace_IsSidebarCollapsed"
+    
+    // MARK: - Published State
+    @Published public var apps: [WorkspaceAppItem] = []
+    @Published public var selectedAppId: String? = nil // nil means Home is selected
+    @Published public var searchQuery: String = ""
+    
+    // Exactly ONE account per login for the app
+    @Published public var userProfile: UserProfile {
+        didSet { saveUserProfile() }
+    }
+    
+    @Published public var appearanceMode: AppearanceMode {
+        didSet {
+            saveAppearanceMode()
+            applyAppearanceToWindow()
+        }
+    }
+    
+    @Published public var hasCompletedSetup: Bool {
+        didSet { UserDefaults.standard.set(hasCompletedSetup, forKey: kHasCompletedSetupKey) }
+    }
+    
+    @Published public var hideTileTitles: Bool {
+        didSet { UserDefaults.standard.set(hideTileTitles, forKey: kHideTileTitlesKey) }
+    }
+    
+    @Published public var isSidebarCollapsed: Bool {
+        didSet { UserDefaults.standard.set(isSidebarCollapsed, forKey: kIsSidebarCollapsedKey) }
+    }
+    
+    // Recently Used section collapsible state
+    @Published public var isRecentlyUsedCollapsed: Bool {
+        didSet { UserDefaults.standard.set(isRecentlyUsedCollapsed, forKey: "isRecentlyUsedCollapsed") }
+    }
+    
+    // App viewing layout mode (Everything, Essentials [Default], Minimalist ["At a glance"])
+    @Published public var appViewMode: AppViewMode {
+        didSet { UserDefaults.standard.set(appViewMode.rawValue, forKey: "appViewMode") }
+    }
+    
+    // Temporary overlay sidebar state when viewing app in Essentials or Minimalist mode
+    @Published public var isManualSidebarOpenInApp: Bool = false
+    
+    // Draggable left bookmark tab position
+    @Published public var bookmarkTabOffsetY: CGFloat = 220.0
+    
+    // Web view navigation action signals
+    @Published public var webViewActionSignal: WebAction = .none
+    
+    public enum WebAction {
+        case none
+        case goBack
+        case goForward
+        case reload
+    }
+    
+    public init() {
+        // Load initial setup status
+        self.hasCompletedSetup = UserDefaults.standard.bool(forKey: kHasCompletedSetupKey)
+        self.hideTileTitles = UserDefaults.standard.bool(forKey: kHideTileTitlesKey)
+        self.isSidebarCollapsed = UserDefaults.standard.bool(forKey: kIsSidebarCollapsedKey)
+        self.isRecentlyUsedCollapsed = UserDefaults.standard.bool(forKey: "isRecentlyUsedCollapsed")
+        
+        // Load App View Mode (defaults to Essentials)
+        if let rawMode = UserDefaults.standard.string(forKey: "appViewMode"),
+           let mode = AppViewMode(rawValue: rawMode) {
+            self.appViewMode = mode
+        } else {
+            self.appViewMode = .essentials
+        }
+        
+        // Load Appearance Mode (default to dark if not set)
+        if let rawMode = UserDefaults.standard.string(forKey: kAppearanceModeKey),
+           let mode = AppearanceMode(rawValue: rawMode) {
+            self.appearanceMode = mode
+        } else {
+            self.appearanceMode = .dark
+        }
+        
+        // Load User Profile (Local Workspace Profile)
+        if let data = UserDefaults.standard.data(forKey: kUserProfileKey),
+           let profile = try? JSONDecoder().decode(UserProfile.self, from: data) {
+            self.userProfile = profile
+        } else {
+            self.userProfile = .default
+        }
+        
+        // Populate apps catalog
+        self.apps = Self.defaultAppsCatalog()
+        
+        // Load Pinned and Recent
+        loadPersistedAppData()
+        
+        // Listen for macOS system theme changes (Dark/Light mode switch)
+        DistributedNotificationCenter.default().addObserver(
+            forName: NSNotification.Name("AppleInterfaceThemeChangedNotification"),
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self = self else { return }
+                if self.appearanceMode == .auto {
+                    self.objectWillChange.send()
+                    self.applyAppearanceToWindow()
+                }
+            }
+        }
+        
+        applyAppearanceToWindow()
+    }
+    
+    public var effectiveColorScheme: ColorScheme {
+        appearanceMode.resolvedColorScheme
+    }
+    
+    public func applyAppearanceToWindow() {
+        DispatchQueue.main.async {
+            for window in NSApp.windows {
+                switch self.appearanceMode {
+                case .light:
+                    window.appearance = NSAppearance(named: .aqua)
+                case .dark:
+                    window.appearance = NSAppearance(named: .darkAqua)
+                case .auto:
+                    window.appearance = nil
+                }
+            }
+        }
+    }
+    
+    // MARK: - App Catalog Definition
+    public static func defaultAppsCatalog() -> [WorkspaceAppItem] {
+        return [
+            WorkspaceAppItem(
+                id: "gemini",
+                name: "Gemini",
+                category: .intelligence,
+                appDescription: "Supercharge your thinking with Google's most capable AI model.",
+                urlString: "https://gemini.google.com",
+                newDocUrlString: "https://gemini.google.com/app",
+                iconSymbol: "sparkles",
+                colorHex: "00A4F9",
+                secondaryColorHex: "F7646F",
+                isPinned: false
+            ),
+            WorkspaceAppItem(
+                id: "docs",
+                name: "Google Docs",
+                category: .productivity,
+                appDescription: "Create, edit, and collaborate on documents in real time.",
+                urlString: "https://docs.google.com",
+                newDocUrlString: "https://docs.new",
+                iconSymbol: "doc.text.fill",
+                colorHex: "4285F4",
+                secondaryColorHex: "1A73E8",
+                isPinned: false
+            ),
+            WorkspaceAppItem(
+                id: "sheets",
+                name: "Google Sheets",
+                category: .productivity,
+                appDescription: "Smart spreadsheets with automated data insights and Gemini tools.",
+                urlString: "https://sheets.google.com",
+                newDocUrlString: "https://sheets.new",
+                iconSymbol: "tablecells.fill",
+                colorHex: "0F9D58",
+                secondaryColorHex: "34A853",
+                isPinned: false
+            ),
+            WorkspaceAppItem(
+                id: "slides",
+                name: "Google Slides",
+                category: .productivity,
+                appDescription: "Stunning presentations with intelligent themes and transitions.",
+                urlString: "https://slides.google.com",
+                newDocUrlString: "https://slides.new",
+                iconSymbol: "play.rectangle.fill",
+                colorHex: "F4B400",
+                secondaryColorHex: "FBBC04",
+                isPinned: false
+            ),
+            WorkspaceAppItem(
+                id: "drive",
+                name: "Google Drive",
+                category: .storageAndAdmin,
+                appDescription: "Secure cloud file storage, synchronisation, and quick file sharing.",
+                urlString: "https://drive.google.com",
+                newDocUrlString: "https://drive.google.com/drive/my-drive",
+                iconSymbol: "externaldrive.fill",
+                colorHex: "34A853",
+                secondaryColorHex: "4285F4",
+                isPinned: false
+            ),
+            WorkspaceAppItem(
+                id: "gmail",
+                name: "Gmail",
+                category: .communication,
+                appDescription: "Secure, smart, and fast email with AI-assisted drafting.",
+                urlString: "https://mail.google.com",
+                newDocUrlString: "https://mail.google.com/mail/u/0/#inbox?compose=new",
+                iconSymbol: "envelope.fill",
+                colorHex: "EA4335",
+                secondaryColorHex: "D93025",
+                isPinned: false
+            ),
+            WorkspaceAppItem(
+                id: "calendar",
+                name: "Google Calendar",
+                category: .communication,
+                appDescription: "Intelligent scheduling, meeting slots, and time management.",
+                urlString: "https://calendar.google.com",
+                newDocUrlString: "https://calendar.google.com/calendar/r/eventedit",
+                iconSymbol: "calendar",
+                colorHex: "4285F4",
+                secondaryColorHex: "1A73E8",
+                isPinned: false
+            ),
+            WorkspaceAppItem(
+                id: "meet",
+                name: "Google Meet",
+                category: .communication,
+                appDescription: "High-definition video meetings with live captions and background blur.",
+                urlString: "https://meet.google.com",
+                newDocUrlString: "https://meet.new",
+                iconSymbol: "video.fill",
+                colorHex: "00AC47",
+                secondaryColorHex: "00832D",
+                isPinned: false
+            ),
+            WorkspaceAppItem(
+                id: "chat",
+                name: "Google Chat",
+                category: .communication,
+                appDescription: "Team messaging spaces, threads, and direct channels.",
+                urlString: "https://chat.google.com",
+                newDocUrlString: nil,
+                iconSymbol: "bubble.left.and.bubble.right.fill",
+                colorHex: "0F9D58",
+                secondaryColorHex: "34A853",
+                isPinned: false
+            ),
+            WorkspaceAppItem(
+                id: "keep",
+                name: "Google Keep",
+                category: .notesAndTasks,
+                appDescription: "Capture notes, lists, voice memos, and fast reminders.",
+                urlString: "https://keep.google.com",
+                newDocUrlString: "https://keep.new",
+                iconSymbol: "lightbulb.fill",
+                colorHex: "F4B400",
+                secondaryColorHex: "FBBC04",
+                isPinned: false
+            ),
+            WorkspaceAppItem(
+                id: "notebooklm",
+                name: "NotebookLM",
+                category: .intelligence,
+                appDescription: "Personalized AI research assistant grounded in your notes and sources.",
+                urlString: "https://notebooklm.google",
+                newDocUrlString: nil,
+                iconSymbol: "book.pages.fill",
+                colorHex: "1A73E8",
+                secondaryColorHex: "9B51E0",
+                isPinned: false
+            ),
+            WorkspaceAppItem(
+                id: "forms",
+                name: "Google Forms",
+                category: .productivity,
+                appDescription: "Create surveys, forms, and quizzes with automatic response analysis.",
+                urlString: "https://forms.google.com",
+                newDocUrlString: "https://forms.new",
+                iconSymbol: "list.clipboard.fill",
+                colorHex: "7248B9",
+                secondaryColorHex: "5E35B1",
+                isPinned: false
+            ),
+            WorkspaceAppItem(
+                id: "sites",
+                name: "Google Sites",
+                category: .productivity,
+                appDescription: "Effortlessly build dynamic team intranet and project sites.",
+                urlString: "https://sites.google.com",
+                newDocUrlString: "https://sites.new",
+                iconSymbol: "globe",
+                colorHex: "1A73E8",
+                secondaryColorHex: "4285F4",
+                isPinned: false
+            ),
+            WorkspaceAppItem(
+                id: "contacts",
+                name: "Google Contacts",
+                category: .storageAndAdmin,
+                appDescription: "Organize, merge, and sync contacts across all your devices.",
+                urlString: "https://contacts.google.com",
+                newDocUrlString: "https://contacts.google.com/new",
+                iconSymbol: "person.crop.circle.fill",
+                colorHex: "4285F4",
+                secondaryColorHex: "1A73E8",
+                isPinned: false
+            ),
+            WorkspaceAppItem(
+                id: "tasks",
+                name: "Google Tasks",
+                category: .notesAndTasks,
+                appDescription: "Track day-to-day to-dos seamlessly integrated with Calendar and Gmail.",
+                urlString: "https://calendar.google.com/calendar/u/0/r/tasks",
+                newDocUrlString: nil,
+                iconSymbol: "checkmark.circle.fill",
+                colorHex: "4285F4",
+                secondaryColorHex: "1A73E8",
+                isPinned: false
+            ),
+            WorkspaceAppItem(
+                id: "classroom",
+                name: "Google Classroom",
+                category: .productivity,
+                appDescription: "All-in-one place for teaching, assignments, and learning.",
+                urlString: "https://classroom.google.com",
+                newDocUrlString: nil,
+                iconSymbol: "graduationcap.fill",
+                colorHex: "0F9D58",
+                secondaryColorHex: "34A853",
+                isPinned: false
+            ),
+            WorkspaceAppItem(
+                id: "cloud",
+                name: "Google Cloud",
+                category: .storageAndAdmin,
+                appDescription: "Build, deploy, and scale applications on Google infrastructure.",
+                urlString: "https://console.cloud.google.com",
+                newDocUrlString: nil,
+                iconSymbol: "cloud.fill",
+                colorHex: "4285F4",
+                secondaryColorHex: "1A73E8",
+                isPinned: false
+            ),
+            WorkspaceAppItem(
+                id: "admin",
+                name: "Google Admin",
+                category: .storageAndAdmin,
+                appDescription: "Manage users, organizational units, and domain security.",
+                urlString: "https://admin.google.com",
+                newDocUrlString: nil,
+                iconSymbol: "gearshape.2.fill",
+                colorHex: "5F6368",
+                secondaryColorHex: "1A73E8",
+                isPinned: false
+            )
+        ]
+    }
+    
+    // MARK: - App Actions
+    public func launchApp(_ app: WorkspaceAppItem) {
+        if let idx = apps.firstIndex(where: { $0.id == app.id }) {
+            apps[idx].lastUsed = Date()
+            apps[idx].launchCount += 1
+            persistAppData()
+        }
+        
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+            selectedAppId = app.id
+        }
+    }
+    
+    public func launchNewItem(for app: WorkspaceAppItem) {
+        if let idx = apps.firstIndex(where: { $0.id == app.id }) {
+            apps[idx].lastUsed = Date()
+            apps[idx].launchCount += 1
+            persistAppData()
+        }
+        
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+            selectedAppId = app.id
+        }
+    }
+    
+    public func togglePin(appId: String) {
+        if let idx = apps.firstIndex(where: { $0.id == appId }) {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                apps[idx].isPinned.toggle()
+            }
+            persistAppData()
+        }
+    }
+    
+    public func goHome() {
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+            selectedAppId = nil
+        }
+    }
+    
+    public func toggleSidebar() {
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
+            isSidebarCollapsed.toggle()
+        }
+    }
+    
+    public func selectProfilePicture() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.allowedContentTypes = [.image, .png, .jpeg]
+        if panel.runModal() == .OK, let url = panel.url, let data = try? Data(contentsOf: url) {
+            userProfile.avatarImageData = data
+        }
+    }
+    
+    public var selectedApp: WorkspaceAppItem? {
+        guard let id = selectedAppId else { return nil }
+        return apps.first(where: { $0.id == id })
+    }
+    
+    public var recentlyUsedApps: [WorkspaceAppItem] {
+        apps.filter { $0.lastUsed != nil }
+            .sorted { ($0.lastUsed ?? .distantPast) > ($1.lastUsed ?? .distantPast) }
+    }
+    
+    public var pinnedApps: [WorkspaceAppItem] {
+        apps.filter { $0.isPinned }
+    }
+    
+    public var filteredApps: [WorkspaceAppItem] {
+        if searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return apps
+        }
+        
+        let q = searchQuery.lowercased()
+        return apps.filter {
+            $0.name.lowercased().contains(q) ||
+            $0.appDescription.lowercased().contains(q)
+        }
+    }
+    
+    // MARK: - Persistence Helpers
+    private func persistAppData() {
+        let pinnedIds = apps.filter { $0.isPinned }.map { $0.id }
+        UserDefaults.standard.set(pinnedIds, forKey: kPinnedAppsKey)
+        
+        var recentsDict: [String: Double] = [:]
+        for app in apps {
+            if let date = app.lastUsed {
+                recentsDict[app.id] = date.timeIntervalSince1970
+            }
+        }
+        UserDefaults.standard.set(recentsDict, forKey: kRecentlyUsedKey)
+    }
+    
+    private func loadPersistedAppData() {
+        if let pinnedIds = UserDefaults.standard.stringArray(forKey: kPinnedAppsKey) {
+            let set = Set(pinnedIds)
+            for i in 0..<apps.count {
+                apps[i].isPinned = set.contains(apps[i].id)
+            }
+        }
+        
+        if let recentsDict = UserDefaults.standard.dictionary(forKey: kRecentlyUsedKey) as? [String: Double] {
+            for i in 0..<apps.count {
+                if let timestamp = recentsDict[apps[i].id] {
+                    apps[i].lastUsed = Date(timeIntervalSince1970: timestamp)
+                }
+            }
+        }
+    }
+    
+    private func saveUserProfile() {
+        if let data = try? JSONEncoder().encode(userProfile) {
+            UserDefaults.standard.set(data, forKey: kUserProfileKey)
+        }
+    }
+    
+    private func saveAppearanceMode() {
+        UserDefaults.standard.set(appearanceMode.rawValue, forKey: kAppearanceModeKey)
+    }
+    
+    public func resetSetup() {
+        hasCompletedSetup = false
+        selectedAppId = nil
+    }
+    
+    // MARK: - Single Account Sign-In
+    public func loginWithAccount(
+        name: String,
+        email: String,
+        usePasskey: Bool = false,
+        tier: SubscriptionTier = .aiPro,
+        completion: (() -> Void)? = nil
+    ) {
+        let finalEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !finalEmail.isEmpty else { return }
+        
+        let finalName = name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? (finalEmail.components(separatedBy: "@").first?.capitalized ?? "Workspace User")
+            : name.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        let parts = finalName.split(separator: " ")
+        let first = parts.first.map(String.init) ?? finalName
+        let last = parts.count > 1 ? parts.dropFirst().joined(separator: " ") : ""
+        
+        // Clear previous cookies so Google starts clean for the new account
+        clearWebKitCookies { [weak self] in
+            guard let self = self else { return }
+            self.userProfile = UserProfile(
+                name: finalName,
+                firstName: first,
+                lastName: last,
+                nickname: "",
+                useNickname: false,
+                email: finalEmail,
+                avatarUrl: nil,
+                avatarImageData: UserProfile.loadDefaultAvatarData(),
+                tier: tier,
+                isLoggedIn: true,
+                hasPasskey: usePasskey
+            )
+            self.saveUserProfile()
+            if self.selectedAppId != nil {
+                self.webViewActionSignal = .reload
+            }
+            completion?()
+        }
+    }
+    
+    // MARK: - Thorough WebKit & Cookie Purge
+    public func clearWebKitCookies(completion: (() -> Void)? = nil) {
+        let dataStore = WKWebsiteDataStore.default()
+        let dataTypes = WKWebsiteDataStore.allWebsiteDataTypes()
+        
+        dataStore.removeData(ofTypes: dataTypes, modifiedSince: Date.distantPast) {
+            let cookieStore = dataStore.httpCookieStore
+            cookieStore.getAllCookies { cookies in
+                let group = DispatchGroup()
+                for cookie in cookies {
+                    group.enter()
+                    cookieStore.delete(cookie) {
+                        group.leave()
+                    }
+                }
+                group.notify(queue: .main) {
+                    HTTPCookieStorage.shared.removeCookies(since: .distantPast)
+                    URLCache.shared.removeAllCachedResponses()
+                    print("Workspace: All WebKit cookies, caches, and Google sessions purged.")
+                    completion?()
+                }
+            }
+        }
+    }
+    
+    // MARK: - Unlink Account / Logout (Strictly removes the single account)
+    public func unlinkAccount() {
+        // Reset user profile to empty unlinked state
+        userProfile = .empty
+        
+        // Remove saved profile from UserDefaults
+        UserDefaults.standard.removeObject(forKey: kUserProfileKey)
+        
+        // Clear all cookies and web cache
+        clearWebKitCookies()
+        
+        // Reset setup and selection
+        selectedAppId = nil
+        hasCompletedSetup = false
+    }
+}
