@@ -30,7 +30,7 @@ rm -f "${PKG_NAME}"
 pkgbuild \
     --component "${APP_BUNDLE}" \
     --install-location "/Applications" \
-    --identifier "com.charlie.workspace.mac" \
+    --identifier "com.workspacemac.app" \
     --version "${VERSION}" \
     "${PKG_NAME}"
 
@@ -121,12 +121,17 @@ EOF
 # Sync & detach
 echo "   -> Finalizing disk image..."
 sync
-sleep 1
-hdiutil detach "${MOUNT_DIR}" -force 2>/dev/null || true
+sleep 2
+hdiutil detach "${MOUNT_DIR}" -force 2>/dev/null || diskutil eject "${MOUNT_DIR}" 2>/dev/null || true
+sleep 2
+
+# Remove previous DMG if present
+rm -f "${DMG_NAME}"
 
 # Compress into final UDZO DMG
 echo "   -> Compressing into final public release DMG..."
 hdiutil convert temp.dmg \
+    -ov \
     -format UDZO \
     -imagekey zlib-level=9 \
     -o "${DMG_NAME}"

@@ -250,36 +250,21 @@ public struct UserProfile: Codable, Equatable, Sendable, Identifiable {
     }
     
     public static func loadDefaultAvatarData() -> Data? {
-        if let resUrl = Bundle.main.url(forResource: "default_avatar", withExtension: "png", subdirectory: "Images") {
-            return try? Data(contentsOf: resUrl)
-        }
-        if let directUrl = Bundle.main.url(forResource: "default_avatar", withExtension: "png") {
-            return try? Data(contentsOf: directUrl)
-        }
-        let localPaths = [
-            "Resources/Images/default_avatar.png",
-            "Workspace.app/Contents/Resources/Images/default_avatar.png"
-        ]
-        for p in localPaths {
-            if FileManager.default.fileExists(atPath: p) {
-                return try? Data(contentsOf: URL(fileURLWithPath: p))
-            }
-        }
         return nil
     }
     
     public static let `default` = UserProfile(
-        name: "Charlie C-S",
-        firstName: "Charlie",
-        lastName: "C-S",
+        name: "",
+        firstName: "",
+        lastName: "",
         nickname: "",
         useNickname: false,
-        email: "ccserfalvismith@gmail.com",
+        email: "",
         avatarUrl: nil,
-        avatarImageData: loadDefaultAvatarData(),
-        tier: .aiPro,
-        isLoggedIn: true,
-        hasPasskey: true
+        avatarImageData: nil,
+        tier: .standard,
+        isLoggedIn: false,
+        hasPasskey: false
     )
     
     public static let empty = UserProfile(

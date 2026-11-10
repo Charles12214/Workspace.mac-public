@@ -526,7 +526,7 @@ public final class AppState: ObservableObject {
                 useNickname: false,
                 email: finalEmail,
                 avatarUrl: nil,
-                avatarImageData: UserProfile.loadDefaultAvatarData(),
+                avatarImageData: nil,
                 tier: tier,
                 isLoggedIn: true,
                 hasPasskey: usePasskey

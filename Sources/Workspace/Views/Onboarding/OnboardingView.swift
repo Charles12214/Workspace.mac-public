@@ -544,7 +544,7 @@ public struct OnboardingView: View {
                                 .foregroundStyle(.secondary)
                         }
                         
-                        TextField("e.g. Charlie, Ace, Boss", text: $state.userProfile.nickname)
+                        TextField("e.g. Alex, Ace, Boss", text: $state.userProfile.nickname)
                             .textFieldStyle(.roundedBorder)
                             .font(.system(size: 13))
                     }

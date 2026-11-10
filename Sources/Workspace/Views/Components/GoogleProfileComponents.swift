@@ -59,9 +59,9 @@ public struct GoogleProfileAvatarView: View {
             ZStack(alignment: .bottomTrailing) {
                 // Main Avatar Circle with Gradient Ring
                 ZStack {
-                    // Inner profile image or initials
+                    // Inner profile image, initial, or generic person icon
                     Group {
-                        if let data = avatarData ?? UserProfile.loadDefaultAvatarData(),
+                        if let data = avatarData,
                            let nsImg = NSImage(data: data) {
                             Image(nsImage: nsImg)
                                 .resizable()
@@ -70,9 +70,18 @@ public struct GoogleProfileAvatarView: View {
                             ZStack {
                                 Circle()
                                     .fill(GeminiPalette.linearGradient)
-                                Text(String(name.prefix(1)).uppercased())
-                                    .font(.system(size: size * 0.42, weight: .bold))
-                                    .foregroundStyle(.white)
+                                let cleanName = name.trimmingCharacters(in: .whitespaces)
+                                if !cleanName.isEmpty && cleanName != "Workspace User" {
+                                    Text(String(cleanName.prefix(1)).uppercased())
+                                        .font(.system(size: size * 0.42, weight: .bold))
+                                        .foregroundStyle(.white)
+                                } else {
+                                    Image(systemName: "person.crop.circle.fill")
+                                        .resizable()
+                                        .aspectRatio(contentMode: .fit)
+                                        .foregroundStyle(.white.opacity(0.92))
+                                        .padding(size * 0.14)
+                                }
                             }
                         }
                     }

@@ -68,25 +68,13 @@ public struct GoogleOAuthPopupView: View {
                             TextField("e.g. subaccount@gmail.com or work@company.com", text: $emailInput)
                                 .textFieldStyle(.roundedBorder)
                                 .font(.system(size: 13))
-                            
-                            // Quick account fill options
-                            HStack(spacing: 8) {
-                                Button("Fill ccserfalvismith@gmail.com") {
-                                    emailInput = "ccserfalvismith@gmail.com"
-                                    nameInput = "Charlie C-S"
-                                }
-                                .font(.system(size: 10.5))
-                                .buttonStyle(.plain)
-                                .foregroundStyle(Color(hex: "1A73E8"))
-                            }
-                            .padding(.top, 2)
                         }
                         
                         VStack(alignment: .leading, spacing: 6) {
                             Text("Full Name (Optional)")
                                 .font(.system(size: 11, weight: .semibold))
                             
-                            TextField("e.g. Charlie Smith", text: $nameInput)
+                            TextField("e.g. Alex Smith", text: $nameInput)
                                 .textFieldStyle(.roundedBorder)
                                 .font(.system(size: 13))
                         }
@@ -184,7 +172,7 @@ public struct GoogleOAuthPopupView: View {
                         Spacer()
                         
                         Button("Done & Apply Account") {
-                            let email = emailInput.isEmpty ? "ccserfalvismith@gmail.com" : emailInput
+                            let email = emailInput.trimmingCharacters(in: .whitespaces).isEmpty ? "user@example.com" : emailInput
                             state.loginWithAccount(name: nameInput, email: email, usePasskey: false) {
                                 onLoginSuccess?()
                                 isPresented = false
