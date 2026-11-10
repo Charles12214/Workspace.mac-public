@@ -178,6 +178,11 @@ public struct WebKitRepresentable: NSViewRepresentable {
         wv.navigationDelegate = context.coordinator
         wv.uiDelegate = context.coordinator
         
+        // Force full Retina backing scale factor for razor-sharp canvas text in Google Docs & Sheets
+        wv.wantsLayer = true
+        wv.layer?.contentsScale = NSScreen.main?.backingScaleFactor ?? 2.0
+        wv.pageZoom = 1.0
+        
         // Use genuine macOS desktop Safari user agent (Safari 18.3)
         // Resolves "This browser or app may not be secure" on Google Sign-In
         wv.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.3 Safari/605.1.15"
