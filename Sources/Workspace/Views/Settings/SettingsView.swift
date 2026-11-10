@@ -8,8 +8,6 @@ public struct SettingsView: View {
     @State private var pulseAtAGlance: Bool = false
     @State private var showingClearCookiesAlert: Bool = false
     @State private var cookiesClearedMessage: Bool = false
-    @State private var passkeyFeedbackText: String? = nil
-    @State private var passkeySuccess: Bool = false
     
     public init(state: AppState) {
         self.state = state
@@ -308,85 +306,6 @@ public struct SettingsView: View {
                                 .font(.system(size: 11))
                                 .foregroundStyle(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
-                        }
-                        .padding(12)
-                        .background(RoundedRectangle(cornerRadius: 10).fill(Color.primary.opacity(0.03)))
-                        
-                        Divider().opacity(0.3)
-                        
-                        // Passkey Functionality
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack(spacing: 8) {
-                                Image(systemName: "person.badge.key.fill")
-                                    .font(.system(size: 14))
-                                    .foregroundStyle(Color(hex: "1A73E8"))
-                                
-                                Text("Passkey & Biometrics")
-                                    .font(.system(size: 12.5, weight: .bold))
-                                
-                                Spacer()
-                                
-                                if state.userProfile.hasPasskey {
-                                    HStack(spacing: 4) {
-                                        Image(systemName: "checkmark.circle.fill")
-                                            .font(.system(size: 11))
-                                            .foregroundStyle(Color(hex: "34A853"))
-                                        Text("Active")
-                                            .font(.system(size: 10.5, weight: .semibold))
-                                            .foregroundStyle(Color(hex: "34A853"))
-                                    }
-                                    .padding(.horizontal, 7)
-                                    .padding(.vertical, 3)
-                                    .background(Color(hex: "34A853").opacity(0.12))
-                                    .clipShape(Capsule())
-                                } else {
-                                    Text("Not Registered")
-                                        .font(.system(size: 10))
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                            
-                            Text("Fast, passwordless sign-in using Touch ID and your Mac's secure enclave keychain.")
-                                .font(.system(size: 11))
-                                .foregroundStyle(.secondary)
-                            
-                            HStack(spacing: 10) {
-                                Button(action: {
-                                    PasskeyAuthService.shared.authenticateWithPasskey(reason: "Verify your Passkey for Google Workspace") { success, error in
-                                        if success {
-                                            state.userProfile.hasPasskey = true
-                                            passkeySuccess = true
-                                            passkeyFeedbackText = "Passkey verified successfully via Touch ID!"
-                                        } else {
-                                            passkeySuccess = false
-                                            passkeyFeedbackText = error ?? "Passkey verification canceled"
-                                        }
-                                        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
-                                            passkeyFeedbackText = nil
-                                        }
-                                    }
-                                }) {
-                                    HStack(spacing: 6) {
-                                        Image(systemName: "touchid")
-                                            .font(.system(size: 12))
-                                        Text(state.userProfile.hasPasskey ? "Test / Verify Touch ID" : "Register Passkey on this Mac")
-                                            .font(.system(size: 11.5, weight: .semibold))
-                                    }
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 6)
-                                    .background(Color(hex: "1A73E8").opacity(0.12))
-                                    .foregroundStyle(Color(hex: "1A73E8"))
-                                    .clipShape(Capsule())
-                                }
-                                .buttonStyle(.plain)
-                                
-                                if let feedback = passkeyFeedbackText {
-                                    Text(feedback)
-                                        .font(.system(size: 10.5))
-                                        .foregroundStyle(passkeySuccess ? Color(hex: "34A853") : Color(hex: "EA4335"))
-                                        .transition(.opacity)
-                                }
-                            }
                         }
                         .padding(12)
                         .background(RoundedRectangle(cornerRadius: 10).fill(Color.primary.opacity(0.03)))

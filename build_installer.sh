@@ -75,11 +75,14 @@ hdiutil create \
     temp.dmg
 
 echo "   -> Mounting temporary disk image for Finder visual styling..."
-MOUNT_DIR=$(hdiutil attach -readwrite -noverify -noautoopen temp.dmg | grep "/Volumes/${VOL_NAME}" | awk '{print $3}')
+ATTACH_OUTPUT=$(hdiutil attach -readwrite -noverify -noautoopen temp.dmg)
+DEV_NODE=$(echo "${ATTACH_OUTPUT}" | head -n 1 | awk '{print $1}')
+MOUNT_DIR=$(echo "${ATTACH_OUTPUT}" | grep -o "/Volumes/.*" | head -n 1)
 
 if [ -z "${MOUNT_DIR}" ]; then
     MOUNT_DIR="/Volumes/${VOL_NAME}"
 fi
+VOL_ACTUAL_NAME=$(basename "${MOUNT_DIR}")
 
 # Apply custom Volume Icon attribute if SetFile is available
 if command -v SetFile &>/dev/null && [ -f "${MOUNT_DIR}/.VolumeIcon.icns" ]; then
@@ -90,7 +93,7 @@ fi
 echo "   -> Setting Finder layout, icon sizes, and background..."
 osascript <<EOF 2>/dev/null || true
 tell application "Finder"
-    tell disk "${VOL_NAME}"
+    tell disk "${VOL_ACTUAL_NAME}"
         open
         set current view of container window to icon view
         set toolbar visible of container window to false
@@ -122,8 +125,13 @@ EOF
 echo "   -> Finalizing disk image..."
 sync
 sleep 2
-hdiutil detach "${MOUNT_DIR}" -force 2>/dev/null || diskutil eject "${MOUNT_DIR}" 2>/dev/null || true
-sleep 2
+if [ -n "${DEV_NODE}" ]; then
+    hdiutil detach "${DEV_NODE}" -force 2>/dev/null || true
+fi
+if [ -d "${MOUNT_DIR}" ]; then
+    hdiutil detach "${MOUNT_DIR}" -force 2>/dev/null || true
+fi
+sleep 3
 
 # Remove previous DMG if present
 rm -f "${DMG_NAME}"

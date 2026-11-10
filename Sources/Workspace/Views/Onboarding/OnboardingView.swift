@@ -24,14 +24,14 @@ public struct OnboardingView: View {
             ambientBackground
             
             VStack(spacing: 0) {
-                // Top Step Progress Indicator (8 steps)
+                // Top Step Progress Indicator (7 steps)
                 topStepBar
                     .padding(.top, 24)
                     .padding(.horizontal, 36)
                 
                 Spacer()
                 
-                // Step Content (8 Steps)
+                // Step Content (7 Steps)
                 ZStack {
                     switch currentStep {
                     case 1:
@@ -51,19 +51,15 @@ public struct OnboardingView: View {
                             .transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity),
                                                     removal: .move(edge: .leading).combined(with: .opacity)))
                     case 5:
-                        step5BadgeAndPlanView
+                        step5PinAppsView
                             .transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity),
                                                     removal: .move(edge: .leading).combined(with: .opacity)))
                     case 6:
-                        step6PinAppsView
+                        step6GoogleAuthGuideView
                             .transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity),
                                                     removal: .move(edge: .leading).combined(with: .opacity)))
                     case 7:
-                        step7GoogleAuthGuideView
-                            .transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity),
-                                                    removal: .move(edge: .leading).combined(with: .opacity)))
-                    case 8:
-                        step8FinalView
+                        step7FinalView
                             .transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity),
                                                     removal: .move(edge: .leading).combined(with: .opacity)))
                     default:
@@ -113,15 +109,15 @@ public struct OnboardingView: View {
         }
     }
     
-    // MARK: - Top Step Bar (8 steps)
+    // MARK: - Top Step Bar (7 steps)
     private var topStepBar: some View {
         HStack(spacing: 8) {
-            ForEach(1...8, id: \.self) { step in
+            ForEach(1...7, id: \.self) { step in
                 Capsule()
                     .fill(
                         step <= currentStep
-                            ? AnyShapeStyle(geminiGradient)
-                            : AnyShapeStyle(Color.primary.opacity(0.1))
+                            ? Color(hex: "4B5563")
+                            : Color.primary.opacity(0.12)
                     )
                     .frame(height: 4)
                     .animation(.spring(response: 0.4, dampingFraction: 0.8), value: currentStep)
@@ -244,7 +240,7 @@ public struct OnboardingView: View {
                             v1FeatureItem(
                                 icon: "sparkles",
                                 title: "Gemini AI Integration",
-                                description: "Dedicated Gemini AI, AI Pro/Plus/Ultra badges & ambient rings."
+                                description: "Dedicated Gemini AI assistant built right into your workspace."
                             )
                             v1FeatureItem(
                                 icon: "macwindow.on.rectangle",
@@ -263,8 +259,8 @@ public struct OnboardingView: View {
                             )
                             v1FeatureItem(
                                 icon: "touchid",
-                                title: "Biometric Touch ID Protection",
-                                description: "Hardware passkey and Touch ID security for your workspace."
+                                title: "Google Passkey Support",
+                                description: "Use your Mac Touch ID / Passkey directly inside Google for fast, secure sign-in."
                             )
                             v1FeatureItem(
                                 icon: "lock.shield.fill",
@@ -584,108 +580,8 @@ public struct OnboardingView: View {
         .liquidGlass(cornerRadius: 24)
     }
     
-    // MARK: - Step 5: Workspace.mac Badge & AI Tier
-    private var step5BadgeAndPlanView: some View {
-        VStack(spacing: 20) {
-            VStack(spacing: 6) {
-                Text("Workspace.mac Badge & AI Tier")
-                    .font(.system(size: 26, weight: .bold, design: .rounded))
-                
-                Text("Select your plan tier to customize your profile ring, badge, and AI integration.")
-                    .font(.system(size: 13.5))
-                    .foregroundStyle(.secondary)
-            }
-            
-            // Tier Selection Cards Grid
-            VStack(spacing: 9) {
-                ForEach([SubscriptionTier.aiPro, SubscriptionTier.aiUltra, SubscriptionTier.aiPlus, SubscriptionTier.standard], id: \.self) { tier in
-                    let isSelected = state.userProfile.tier == tier
-                    Button(action: {
-                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                            state.userProfile.tier = tier
-                        }
-                    }) {
-                        HStack(spacing: 14) {
-                            AiTierBadgeView(tier: tier)
-                            
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(tier.rawValue)
-                                    .font(.system(size: 13.5, weight: .bold))
-                                    .foregroundStyle(isSelected ? Color.primary : .secondary)
-                                
-                                Text(tier.summaryText(name: state.userProfile.greetingName))
-                                    .font(.system(size: 11))
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                            }
-                            
-                            Spacer()
-                            
-                            if isSelected {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .font(.system(size: 16))
-                                    .foregroundStyle(Color(hex: "34A853"))
-                            }
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 9)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(isSelected ? Color(hex: "1A73E8").opacity(0.08) : Color.primary.opacity(0.02))
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .stroke(isSelected ? Color(hex: "1A73E8").opacity(0.6) : Color.primary.opacity(0.06), lineWidth: isSelected ? 1.5 : 1)
-                        )
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            
-            // Passkey / Touch ID Card
-            HStack(spacing: 12) {
-                Image(systemName: "touchid")
-                    .font(.system(size: 20))
-                    .foregroundStyle(Color(hex: "8B5CF6"))
-                
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Mac Touch ID / Passkey Security")
-                        .font(.system(size: 12.5, weight: .bold))
-                    Text("Optional: Protect your local Workspace.mac with your Mac's secure biometric authentication.")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                }
-                
-                Spacer()
-                
-                Button(action: {
-                    PasskeyAuthService.shared.authenticateWithPasskey(reason: "Register Passkey for Workspace.mac") { success, _ in
-                        if success {
-                            state.userProfile.hasPasskey.toggle()
-                        }
-                    }
-                }) {
-                    Text(state.userProfile.hasPasskey ? "Enabled" : "Enable")
-                        .font(.system(size: 11.5, weight: .semibold))
-                        .foregroundStyle(state.userProfile.hasPasskey ? Color(hex: "34A853") : Color(hex: "8B5CF6"))
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(
-                            (state.userProfile.hasPasskey ? Color(hex: "34A853") : Color(hex: "8B5CF6")).opacity(0.12)
-                        )
-                        .clipShape(Capsule())
-                }
-                .buttonStyle(.plain)
-            }
-            .padding(12)
-            .liquidGlass(cornerRadius: 14)
-        }
-        .padding(30)
-        .liquidGlass(cornerRadius: 24)
-    }
-    
-    // MARK: - Step 6: Pin Your Favorite Apps
-    private var step6PinAppsView: some View {
+    // MARK: - Step 5: Pin Your Favorite Apps
+    private var step5PinAppsView: some View {
         VStack(spacing: 16) {
             VStack(spacing: 6) {
                 Text("Pin Your Favorite Apps")
@@ -788,8 +684,8 @@ public struct OnboardingView: View {
         .liquidGlass(cornerRadius: 24)
     }
     
-    // MARK: - Step 7: Google Workspace Sign-In Guide
-    private var step7GoogleAuthGuideView: some View {
+    // MARK: - Step 6: Google Workspace Sign-In Guide
+    private var step6GoogleAuthGuideView: some View {
         VStack(spacing: 20) {
             VStack(spacing: 6) {
                 Text("Google Workspace Sign-In")
@@ -838,7 +734,7 @@ public struct OnboardingView: View {
                         icon: "sparkles",
                         color: Color(hex: "8B5CF6"),
                         title: "Gemini Workspace Ready",
-                        description: "Your \(state.userProfile.tier.badgeLabel) features and Google Workspace access work immediately once logged into Google in the app window."
+                        description: "Gemini features and Google Workspace access work seamlessly once logged into Google in the app window."
                     )
                 }
             }
@@ -880,8 +776,8 @@ public struct OnboardingView: View {
         }
     }
     
-    // MARK: - Step 8: Final Setup Screen
-    private var step8FinalView: some View {
+    // MARK: - Step 7: Final Setup Screen
+    private var step7FinalView: some View {
         VStack(spacing: 28) {
             // Animated Soft Pulsing Gemini Sparkle Orb
             ZStack {
@@ -988,14 +884,14 @@ public struct OnboardingView: View {
             
             Spacer()
             
-            if currentStep < 8 {
+            if currentStep < 7 {
                 Button(action: {
                     withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                         currentStep += 1
                     }
                 }) {
                     HStack(spacing: 6) {
-                        Text(currentStep == 7 ? "Review Final Step" : "Continue")
+                        Text(currentStep == 6 ? "Review Final Step" : "Continue")
                             .font(.system(size: 13, weight: .semibold))
                         Image(systemName: "arrow.right")
                             .font(.system(size: 12, weight: .bold))

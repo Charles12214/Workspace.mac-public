@@ -57,9 +57,9 @@ public struct GoogleProfileAvatarView: View {
     public var body: some View {
         Button(action: { action?() }) {
             ZStack(alignment: .bottomTrailing) {
-                // Main Avatar Circle with Gradient Ring
+                // Main Avatar Circle with Clean Border
                 ZStack {
-                    // Inner profile image, initial, or generic person icon
+                    // Inner profile image, initial, or standard PFP icon
                     Group {
                         if let data = avatarData,
                            let nsImg = NSImage(data: data) {
@@ -68,37 +68,34 @@ public struct GoogleProfileAvatarView: View {
                                 .aspectRatio(contentMode: .fill)
                         } else {
                             ZStack {
+                                // Simple, clean dark grey circle
                                 Circle()
-                                    .fill(GeminiPalette.linearGradient)
+                                    .fill(Color(hex: "374151"))
+                                
                                 let cleanName = name.trimmingCharacters(in: .whitespaces)
                                 if !cleanName.isEmpty && cleanName != "Workspace User" {
+                                    // Start with the first letter of the first name
                                     Text(String(cleanName.prefix(1)).uppercased())
-                                        .font(.system(size: size * 0.42, weight: .bold))
+                                        .font(.system(size: size * 0.44, weight: .bold, design: .rounded))
                                         .foregroundStyle(.white)
                                 } else {
-                                    Image(systemName: "person.crop.circle.fill")
+                                    // Standard PFP icon
+                                    Image(systemName: "person.fill")
                                         .resizable()
                                         .aspectRatio(contentMode: .fit)
-                                        .foregroundStyle(.white.opacity(0.92))
-                                        .padding(size * 0.14)
+                                        .foregroundStyle(.white.opacity(0.85))
+                                        .padding(size * 0.22)
                                 }
                             }
                         }
                     }
-                    .frame(width: size - (tier.isAiTier ? size * 0.14 : 2),
-                           height: size - (tier.isAiTier ? size * 0.14 : 2))
+                    .frame(width: size - 2, height: size - 2)
                     .clipShape(Circle())
                     
-                    // Gradient Ring (for AI Plus, AI Pro, AI Ultra)
-                    if tier.isAiTier {
-                        Circle()
-                            .strokeBorder(GoogleAiDesign.ringGradient, lineWidth: max(2.0, size * 0.08))
-                            .frame(width: size, height: size)
-                    } else {
-                        Circle()
-                            .strokeBorder(Color.primary.opacity(0.12), lineWidth: 1.0)
-                            .frame(width: size, height: size)
-                    }
+                    // Simple, clean subtle border
+                    Circle()
+                        .strokeBorder(Color.primary.opacity(0.12), lineWidth: 1.0)
+                        .frame(width: size, height: size)
                 }
                 .frame(width: size, height: size)
                 
