@@ -4,7 +4,7 @@
 
 [![macOS](https://img.shields.io/badge/macOS-13.0%2B-blue?logo=apple)](https://github.com/Charles12214/Workspace.mac-public/releases)
 [![Apple Silicon](https://img.shields.io/badge/Architecture-Apple%20Silicon-success?logo=apple)](https://github.com/Charles12214/Workspace.mac-public/releases)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![License: Freeware](https://img.shields.io/badge/License-Freeware%20(Free)-green.svg)](LICENSE)
 
 ---
 
@@ -29,3 +29,9 @@ Download the latest version from our [Releases page](https://github.com/Charles1
 2. **PKG Installer**: Run `Workspace.mac-1.1.0.pkg` for a guided installation.
 
 *Requires macOS 13.0 (Ventura) or later on Apple Silicon (M1/M2/M3/M4).*
+
+---
+
+## 📄 License & Terms
+
+Workspace.mac is free proprietary software (Freeware). It is 100% free to download and use for personal, academic, and commercial productivity. Redistribution, monetization, or resale is prohibited. See [LICENSE](LICENSE) for full details.

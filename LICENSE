@@ -1,21 +1,17 @@
-MIT License
+# Workspace.mac Software License & Terms of Use
 
-Copyright (c) 2026 Charlie Cserfalvi-Smith
+Copyright (c) 2026 Charlie C-S. All Rights Reserved.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+## 1. Grant of License
+Workspace.mac is free proprietary software (Freeware). Permission is hereby granted to any individual or organization to download, install, and use this software free of charge for personal, educational, or commercial productivity purposes, subject to the terms and restrictions below.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+## 2. Restrictions
+- **No Resale or Sublicensing**: You may not sell, rent, lease, sublicense, monetize, or charge fees for this software, its binary distributions (.dmg, .pkg, .app), or any part thereof.
+- **No Rebranding or Derivative Distribution**: You may not recompile, rebrand, modify, package, or redistribute this software under a different name or as a paid commercial product without prior written consent from the author.
+- **Reverse Engineering**: You may not decompile, disassemble, or reverse engineer the software, except to the extent permitted by applicable law.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+## 3. Intellectual Property
+All rights, title, trademarks, brand identity, and intellectual property rights in and to Workspace.mac remain exclusively with the author.
+
+## 4. Disclaimer of Warranty
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY ARISING FROM THE USE OF OR INABILITY TO USE THE SOFTWARE.
