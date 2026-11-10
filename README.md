@@ -34,4 +34,4 @@ Download the latest version from our [Releases page](https://github.com/Charles1
 
 ## 📄 License & Terms
 
-Workspace.mac is free proprietary software (Freeware). It is 100% free to download and use for personal, academic, and commercial productivity. Redistribution, monetization, or resale is prohibited. See [LICENSE](LICENSE) for full details.
+Workspace.mac is free proprietary software (Freeware). It is 100% free to download and use for personal, academic, and commercial productivity. Redistribution, monetization, or resale is prohibited. See [LICENSE](LICENSE) for full details. 
