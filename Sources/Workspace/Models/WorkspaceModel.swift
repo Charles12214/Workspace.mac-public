@@ -145,6 +145,7 @@ public enum AppViewMode: String, CaseIterable, Codable, Identifiable, Sendable {
     case everything = "Everything"
     case essentials = "Essentials"
     case minimalist = "Minimalist"
+    case separated = "Separated Apps"
     
     public var id: String { rawValue }
     
@@ -153,6 +154,7 @@ public enum AppViewMode: String, CaseIterable, Codable, Identifiable, Sendable {
         case .everything: return "Sidebar and top bar visible"
         case .essentials: return "Top bar only (manual sidebar toggle)"
         case .minimalist: return "Fullscreen immersion with top-middle hover bar"
+        case .separated: return "Automatically opens apps in standalone separated windows"
         }
     }
 }

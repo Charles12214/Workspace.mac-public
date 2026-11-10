@@ -1,4 +1,56 @@
 import SwiftUI
+import AppKit
+
+// MARK: - Asset Loader for Official Google Workspace Icons
+@MainActor
+public final class AppIconAssetLoader {
+    public static let shared = AppIconAssetLoader()
+    private var cache: [String: NSImage] = [:]
+    
+    public func image(for appId: String) -> NSImage? {
+        let key = appId.lowercased()
+        if let cached = cache[key] {
+            return cached
+        }
+        
+        // 1. Check inside application bundle Images/apps/
+        if let resourceURL = Bundle.main.resourceURL {
+            let bundledAppURL = resourceURL.appendingPathComponent("Images/apps/\(key).png")
+            if let img = NSImage(contentsOf: bundledAppURL) {
+                cache[key] = img
+                return img
+            }
+            let bundledDirectURL = resourceURL.appendingPathComponent("Images/\(key).png")
+            if let img = NSImage(contentsOf: bundledDirectURL) {
+                cache[key] = img
+                return img
+            }
+        }
+        
+        // 2. Bundle URL lookup
+        if let url = Bundle.main.url(forResource: key, withExtension: "png", subdirectory: "Images/apps") ??
+                     Bundle.main.url(forResource: key, withExtension: "png") {
+            if let img = NSImage(contentsOf: url) {
+                cache[key] = img
+                return img
+            }
+        }
+        
+        // 3. Fallback for local build paths
+        let localPaths = [
+            "Resources/Images/apps/\(key).png",
+            "Resources/Images/\(key).png"
+        ]
+        for path in localPaths {
+            if let img = NSImage(contentsOfFile: path) {
+                cache[key] = img
+                return img
+            }
+        }
+        
+        return nil
+    }
+}
 
 // MARK: - Dedicated Google Workspace App Icon Renderer
 public struct GoogleAppIconView: View {
@@ -11,6 +63,21 @@ public struct GoogleAppIconView: View {
     }
     
     public var body: some View {
+        Group {
+            if let customImg = AppIconAssetLoader.shared.image(for: appId) {
+                Image(nsImage: customImg)
+                    .resizable()
+                    .interpolation(.high)
+                    .aspectRatio(contentMode: .fit)
+            } else {
+                vectorIcon
+            }
+        }
+        .frame(width: size, height: size)
+    }
+    
+    @ViewBuilder
+    private var vectorIcon: some View {
         Group {
             switch appId {
             case "gemini":
@@ -55,7 +122,6 @@ public struct GoogleAppIconView: View {
                     .foregroundStyle(Color.accentColor)
             }
         }
-        .frame(width: size, height: size)
     }
     
     // MARK: - 1. Gemini

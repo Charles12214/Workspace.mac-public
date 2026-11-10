@@ -72,10 +72,11 @@ public struct SettingsView: View {
                         }
                         
                         // Mode Selector Row
-                        HStack(spacing: 10) {
+                        HStack(spacing: 8) {
                             modeOptionCard(mode: .everything, title: "Everything", subtitle: "Sidebar + Top Bar")
                             modeOptionCard(mode: .essentials, title: "Essentials", subtitle: "Top Bar only")
                             modeOptionCard(mode: .minimalist, title: "Minimalist", subtitle: "'At a glance'")
+                            modeOptionCard(mode: .separated, title: "Separated Apps", subtitle: "Separate window")
                         }
                         
                         Divider().opacity(0.3)

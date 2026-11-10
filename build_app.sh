@@ -13,7 +13,7 @@ sleep 0.5
 echo "🔨 Building Workspace for macOS (Release)..."
 export SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk
 
-swift build -c release
+swift build -c release -Xswiftc -gnone
 
 BINARY_NAME="Workspace"
 APP_NAME="Workspace.mac"

@@ -76,7 +76,7 @@ public struct StandaloneAppWindowView: View {
                     .help("Zoom Out (Cmd -)")
                     
                     Button(action: { resetZoom() }) {
-                        Text("\(Int(currentZoom * 100))%")
+                        Text("\(Int(round(currentZoom * 100)))%")
                             .font(.system(size: 10, weight: .semibold, design: .monospaced))
                             .foregroundStyle(.secondary)
                             .padding(.horizontal, 4)
@@ -152,14 +152,16 @@ public struct StandaloneAppWindowView: View {
     
     private func zoomIn() {
         guard let wv = webView else { return }
-        wv.pageZoom = min(wv.pageZoom + 0.1, 3.0)
-        currentZoom = wv.pageZoom
+        let next = min((round(wv.pageZoom * 10) / 10) + 0.1, 3.0)
+        wv.pageZoom = next
+        currentZoom = next
     }
     
     private func zoomOut() {
         guard let wv = webView else { return }
-        wv.pageZoom = max(wv.pageZoom - 0.1, 0.5)
-        currentZoom = wv.pageZoom
+        let next = max((round(wv.pageZoom * 10) / 10) - 0.1, 0.5)
+        wv.pageZoom = next
+        currentZoom = next
     }
     
     private func resetZoom() {

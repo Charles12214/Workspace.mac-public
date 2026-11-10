@@ -60,22 +60,36 @@ public final class AppState: ObservableObject {
     @Published public var dismissedUpdateTags: Set<String> = []
     
     // Active Web View & Zoom Controls
-    public weak var activeWebView: WKWebView? = nil
+    public weak var activeWebView: WKWebView? = nil {
+        didSet {
+            if let wv = activeWebView {
+                currentZoom = Double(wv.pageZoom)
+            } else {
+                currentZoom = 1.0
+            }
+        }
+    }
+    @Published public var currentZoom: Double = 1.0
     
     public func zoomIn() {
         guard let wv = activeWebView else { return }
-        wv.pageZoom = min(wv.pageZoom + 0.1, 3.0)
+        let next = min((round(Double(wv.pageZoom) * 10) / 10) + 0.1, 3.0)
+        wv.pageZoom = CGFloat(next)
+        currentZoom = next
     }
     
     public func zoomOut() {
         guard let wv = activeWebView else { return }
-        wv.pageZoom = max(wv.pageZoom - 0.1, 0.5)
+        let next = max((round(Double(wv.pageZoom) * 10) / 10) - 0.1, 0.5)
+        wv.pageZoom = CGFloat(next)
+        currentZoom = next
     }
     
     public func resetZoom() {
         guard let wv = activeWebView else { return }
         wv.pageZoom = 1.0
         wv.magnification = 1.0
+        currentZoom = 1.0
     }
     
     public func dismissUpdate(_ tag: String) {
@@ -421,6 +435,11 @@ public final class AppState: ObservableObject {
             persistAppData()
         }
         
+        if appViewMode == .separated {
+            openSeparateWindow(for: app)
+            return
+        }
+        
         withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
             selectedAppId = app.id
         }
@@ -431,6 +450,11 @@ public final class AppState: ObservableObject {
             apps[idx].lastUsed = Date()
             apps[idx].launchCount += 1
             persistAppData()
+        }
+        
+        if appViewMode == .separated {
+            openSeparateWindow(for: app)
+            return
         }
         
         withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {

@@ -43,6 +43,16 @@ public struct ViewModeIcon: View {
                     
                 case .minimalist:
                     EmptyView()
+                    
+                case .separated:
+                    // Window with separated pop-out arrow badge
+                    Rectangle()
+                        .fill(accentColor)
+                        .frame(width: 18, height: 3.2)
+                    Image(systemName: "arrow.up.forward.app")
+                        .font(.system(size: 6, weight: .bold))
+                        .foregroundStyle(accentColor)
+                        .offset(x: 3.5, y: 1.5)
                 }
             }
             .frame(width: 18, height: 13.5)
@@ -354,7 +364,7 @@ public struct WorkspaceAppContainer: View {
                 .help("Zoom Out (Cmd -)")
                 
                 Button(action: { state.resetZoom() }) {
-                    Text("\(Int((state.activeWebView?.pageZoom ?? 1.0) * 100))%")
+                    Text("\(Int(round(state.currentZoom * 100)))%")
                         .font(.system(size: 10, weight: .semibold, design: .monospaced))
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 3)
@@ -406,11 +416,12 @@ public struct WorkspaceAppContainer: View {
             .buttonStyle(.plain)
             .help("Open \(app.name) in Separate Window")
             
-            // MARK: - View Mode Switcher (Everything, Essentials, Minimalist)
+            // MARK: - View Mode Switcher (Everything, Essentials, Minimalist, Separated)
             HStack(spacing: 2) {
                 viewModeButton(mode: .everything, help: "Everything: Sidebar and Top Bar")
                 viewModeButton(mode: .essentials, help: "Essentials: Top Bar only (Default)")
                 viewModeButton(mode: .minimalist, help: "Minimalist: 'At a glance' Fullscreen")
+                viewModeButton(mode: .separated, help: "Separated: Standalone Windows")
             }
             .padding(2)
             .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.05)))
@@ -440,6 +451,10 @@ public struct WorkspaceAppContainer: View {
         Button(action: {
             withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                 state.appViewMode = mode
+                if mode == .separated {
+                    state.openSeparateWindow(for: app)
+                    state.goHome()
+                }
             }
         }) {
             ViewModeIcon(mode: mode, isSelected: state.appViewMode == mode)
