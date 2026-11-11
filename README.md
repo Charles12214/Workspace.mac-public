@@ -10,8 +10,9 @@
 
 ## ✨ Features
 
+- **Dedicated 5-Account Switcher (New in v1.2.0)**: Connect and switch between up to 5 isolated Google Workspace accounts (Work, Personal, School). Switch instantly using the quick arrow on the expanded sidebar or in Settings without logging out or cookie mixing.
 - **"Continue Where You Left Off" Hero Hub (New in v1.2.0)**: Instant access to your last-edited document directly on the home screen with clean document title and one-click direct resume.
-- **Clean Document Canvas & Full-Width View (New in v1.2.0)**: Permanently removes the redundant in-page Google Workspace companion sidebar on the right side of Docs, Sheets, Slides, Drive, Calendar, and Gmail via DOM excision, reclaiming 100% horizontal display width.
+- **Clean Document Canvas & Full-Width View (New in v1.2.0)**: Cleanly collapses the redundant in-page Google Workspace companion sidebar on the right side of Docs, Sheets, Slides, Drive, Calendar, and Gmail, reclaiming 100% horizontal display width.
 - **Pre-downloaded Offline Cache (New in v1.2.0)**: Background pre-warming and persistent WebKit caching for core apps (Docs, Sheets, Slides, Drive, Keep, Calendar, NotebookLM) for offline readiness and instant launch speeds.
 - **18 Google Workspace Services & Gemini**: Instant access to Gmail, Docs, Sheets, Slides, Drive, Calendar, Meet, Chat, Keep, NotebookLM, Forms, Sites, Contacts, Tasks, Classroom, Google Cloud, and Gemini.
 - **"Separated Apps" Mode**: Automatically launches any selected app directly into a separate standalone window.
