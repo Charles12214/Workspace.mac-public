@@ -129,26 +129,31 @@ public struct OnboardingView: View {
     // MARK: - Step 1: Welcome Screen
     private var step1WelcomeView: some View {
         VStack(spacing: 20) {
-            // Glowing Gemini / Workspace Emblem
+            // Workspace App Icon Emblem
             ZStack {
                 Circle()
-                    .fill(geminiGradient.opacity(0.2))
-                    .frame(width: 90, height: 90)
+                    .fill(Color.accentColor.opacity(0.18))
+                    .frame(width: 96, height: 96)
                     .blur(radius: 16)
-                    .scaleEffect(geminiGlowPulse ? 1.15 : 0.95)
+                    .scaleEffect(geminiGlowPulse ? 1.10 : 0.95)
                 
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    .frame(width: 80, height: 80)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 22, style: .continuous)
-                            .stroke(geminiGradient, lineWidth: 2)
-                    )
-                    .shadow(color: GeminiPalette.blue.opacity(0.4), radius: 14)
-                
-                GeminiSparkleShape()
-                    .fill(GeminiPalette.starGradient)
-                    .frame(width: 42, height: 42)
+                if let logoImg = AppIconAssetLoader.shared.image(for: "workspace") ?? AppIconAssetLoader.shared.image(for: "workspace_icon") {
+                    Image(nsImage: logoImg)
+                        .resizable()
+                        .interpolation(.high)
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 82, height: 82)
+                        .shadow(color: Color.black.opacity(0.25), radius: 14, y: 5)
+                } else {
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .fill(.ultraThinMaterial)
+                        .frame(width: 80, height: 80)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                                .stroke(Color.accentColor, lineWidth: 2)
+                        )
+                        .shadow(color: Color.black.opacity(0.2), radius: 14)
+                }
             }
             .padding(.bottom, 8)
             
@@ -785,27 +790,32 @@ public struct OnboardingView: View {
     // MARK: - Step 7: Final Setup Screen
     private var step7FinalView: some View {
         VStack(spacing: 28) {
-            // Animated Soft Pulsing Gemini Sparkle Orb
+            // Animated Soft Pulsing Workspace App Icon
             ZStack {
                 Circle()
-                    .fill(geminiGradient.opacity(0.25))
+                    .fill(Color.accentColor.opacity(0.22))
                     .frame(width: 130, height: 130)
                     .blur(radius: 28)
-                    .scaleEffect(animateFinalText ? 1.2 : 0.85)
+                    .scaleEffect(animateFinalText ? 1.15 : 0.90)
                 
-                RoundedRectangle(cornerRadius: 30, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    .frame(width: 100, height: 100)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 30, style: .continuous)
-                            .stroke(geminiGradient, lineWidth: 2.5)
-                    )
-                    .shadow(color: GeminiPalette.blue.opacity(0.5), radius: 20)
-                
-                GeminiSparkleShape()
-                    .fill(GeminiPalette.starGradient)
-                    .frame(width: 52, height: 52)
-                    .scaleEffect(animateFinalText ? 1.08 : 0.96)
+                if let logoImg = AppIconAssetLoader.shared.image(for: "workspace") ?? AppIconAssetLoader.shared.image(for: "workspace_icon") {
+                    Image(nsImage: logoImg)
+                        .resizable()
+                        .interpolation(.high)
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 96, height: 96)
+                        .shadow(color: Color.black.opacity(0.3), radius: 18, y: 6)
+                        .scaleEffect(animateFinalText ? 1.05 : 0.97)
+                } else {
+                    RoundedRectangle(cornerRadius: 30, style: .continuous)
+                        .fill(.ultraThinMaterial)
+                        .frame(width: 100, height: 100)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 30, style: .continuous)
+                                .stroke(Color.accentColor, lineWidth: 2.5)
+                        )
+                        .shadow(color: Color.black.opacity(0.3), radius: 20)
+                }
             }
             
             // Letter-by-letter uprise animation with blur decay
