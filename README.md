@@ -10,8 +10,11 @@
 
 ## ✨ Features
 
+- **"Continue Where You Left Off" Hero Hub (New in v1.2.0)**: Instant access to your last-edited document directly on the home screen with clean document title and one-click direct resume.
+- **Clean Document Canvas & Full-Width View (New in v1.2.0)**: Permanently removes the redundant in-page Google Workspace companion sidebar on the right side of Docs, Sheets, Slides, Drive, Calendar, and Gmail via DOM excision, reclaiming 100% horizontal display width.
+- **Pre-downloaded Offline Cache (New in v1.2.0)**: Background pre-warming and persistent WebKit caching for core apps (Docs, Sheets, Slides, Drive, Keep, Calendar, NotebookLM) for offline readiness and instant launch speeds.
 - **18 Google Workspace Services & Gemini**: Instant access to Gmail, Docs, Sheets, Slides, Drive, Calendar, Meet, Chat, Keep, NotebookLM, Forms, Sites, Contacts, Tasks, Classroom, Google Cloud, and Gemini.
-- **"Separated Apps" Mode (New in v1.1.0)**: Automatically launches any selected app directly into a separate standalone window.
+- **"Separated Apps" Mode**: Automatically launches any selected app directly into a separate standalone window.
 - **Standalone App Windows**: Detach any app into an independent window with minimal top controls for multi-monitor workflows without sidebar or home distractions.
 - **Interactive Zoom Controls**: Dedicated, clickable `+` and `-` zoom buttons with live percentage display and standard `Cmd +` / `Cmd -` / `Cmd 0` keyboard shortcuts.
 - **Official Brand Icons**: Official transparent logos for Gemini, Google Drive, Gmail, Calendar, Meet, Chat, NotebookLM, and more.
@@ -25,8 +28,8 @@
 
 Download the latest version from our [Releases page](https://github.com/Charles12214/Workspace.mac-public/releases/latest):
 
-1. **DMG Disk Image**: Open `Workspace.mac-1.1.0.dmg` and drag `Workspace.mac` to `/Applications`.
-2. **PKG Installer**: Run `Workspace.mac-1.1.0.pkg` for a guided installation.
+1. **DMG Disk Image**: Open `Workspace.mac-1.2.0.dmg` and drag `Workspace.mac` to `/Applications`.
+2. **PKG Installer**: Run `Workspace.mac-1.2.0.pkg` for a guided installation.
 
 *Requires macOS 13.0 (Ventura) or later on Apple Silicon (M1/M2/M3/M4).*
 
