@@ -176,10 +176,7 @@ public struct WebKitRepresentable: NSViewRepresentable {
         configuration.websiteDataStore = AppState.shared.activeDataStore
         configuration.preferences.setValue(true, forKey: "developerExtrasEnabled")
         
-        // Match exact native Safari 27.2 User-Agent on macOS
-        configuration.applicationNameForUserAgent = "Version/27.2 Safari/605.1.15"
-        
-        // Suppress browser upgrade and promo banners via CSS injection (do NOT run on accounts.google.com)
+        // Suppress browser upgrade banners and hide companion sidebar cleanly via CSS (never inject into subframes or accounts.google.com)
         let customScript = """
         if (!window.location.hostname.includes('accounts.google.com')) {
             const style = document.createElement('style');
@@ -188,29 +185,18 @@ public struct WebKitRepresentable: NSViewRepresentable {
                 /* Promo / Download Banners */
                 #push-modal, [aria-label*="Try Chrome"], [aria-label*="switch to Chrome"],
                 [aria-label*="supported browser"], .apps-promo-card, .promo-banner, .app-download-banner,
-                div[role="alert"]:has(a[href*="chrome"]), .butterbar-container:has(a[href*="chrome"]) {
+                div[role="alert"]:has(a[href*="chrome"]), .butterbar-container:has(a[href*="chrome"]),
+
+                /* Cleanly hide Google companion right sidebar & collapse toggle */
+                .companion-collapser-button-container,
+                .companion-app-sidebar-container {
                     display: none !important;
-                    visibility: hidden !important;
-                    height: 0 !important;
                 }
             `;
             (document.head || document.documentElement).appendChild(style);
-
-            // Cleanly collapse Google Docs right companion side panel using Google's native API/controls
-            function collapseCompanionRail() {
-                const hideBtn = document.querySelector('button[aria-label*="Hide side panel"], div[role="button"][aria-label*="Hide side panel"]');
-                if (hideBtn) {
-                    hideBtn.click();
-                }
-            }
-            if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', () => setTimeout(collapseCompanionRail, 1000));
-            } else {
-                setTimeout(collapseCompanionRail, 1000);
-            }
         }
         """
-        let userScript = WKUserScript(source: customScript, injectionTime: .atDocumentEnd, forMainFrameOnly: false)
+        let userScript = WKUserScript(source: customScript, injectionTime: .atDocumentEnd, forMainFrameOnly: true)
         configuration.userContentController.addUserScript(userScript)
         
         // Initialize with real screen frame so WebKit and Google Docs initialize at full Retina resolution
@@ -220,6 +206,9 @@ public struct WebKitRepresentable: NSViewRepresentable {
         wv.navigationDelegate = context.coordinator
         wv.uiDelegate = context.coordinator
         wv.allowsMagnification = true
+        
+        // Genuine macOS desktop Safari 18.3 User-Agent
+        wv.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.3 Safari/605.1.15"
         
         context.coordinator.setupObservers(for: wv)
         
