@@ -628,7 +628,7 @@ public final class AppState: ObservableObject {
     }
     
     public func toggleSidebar() {
-        withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
+        withAnimation(.easeInOut(duration: 0.16)) {
             isSidebarCollapsed.toggle()
         }
     }
@@ -742,12 +742,20 @@ public final class AppState: ObservableObject {
         }
     }
     
-    public func addNewAccount(name: String, email: String, label: String = "") {
+    public func addNewAccount(
+        label: String = "",
+        firstName: String,
+        lastName: String = "",
+        nickname: String = "",
+        useNickname: Bool = false
+    ) {
         guard accounts.count < Self.maxAccountsCount else { return }
-        let cleanEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
-        let cleanName = name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ? (cleanEmail.components(separatedBy: "@").first?.capitalized ?? "Google Account \(accounts.count + 1)")
-            : name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanFirst = firstName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanLast = lastName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanNick = nickname.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        let fullName = [cleanFirst, cleanLast].filter { !$0.isEmpty }.joined(separator: " ")
+        let displayName = fullName.isEmpty ? "Account \(accounts.count + 1)" : fullName
         
         let finalLabel = label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             ? "Account \(accounts.count + 1)"
@@ -757,14 +765,18 @@ public final class AppState: ObservableObject {
             accountId: UUID().uuidString,
             dataStoreUuid: UUID(),
             accountLabel: finalLabel,
-            name: cleanName,
-            firstName: cleanName.components(separatedBy: " ").first ?? cleanName,
-            lastName: cleanName.components(separatedBy: " ").dropFirst().joined(separator: " "),
-            email: cleanEmail,
-            isLoggedIn: !cleanEmail.isEmpty
+            name: displayName,
+            firstName: cleanFirst.isEmpty ? displayName : cleanFirst,
+            lastName: cleanLast,
+            nickname: cleanNick,
+            useNickname: useNickname,
+            email: "",
+            avatarImageData: nil, // Distinct default avatar, never copying previous account
+            tier: .standard,
+            isLoggedIn: false
         )
         
-        withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+        withAnimation(.easeInOut(duration: 0.15)) {
             accounts.append(newAccount)
             activeAccountId = newAccount.accountId
         }

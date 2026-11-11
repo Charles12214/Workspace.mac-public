@@ -23,52 +23,21 @@ public struct LiquidGlassCard: ViewModifier {
         content
             .background(
                 ZStack {
-                    // Frosted Glass material base
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .fill(.ultraThinMaterial)
+                        .fill(Color(nsColor: .controlBackgroundColor).opacity(0.85))
                     
-                    // Subtle dynamic color tint
                     if let tint = tintColor {
                         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                            .fill(tint.opacity(isHighlighted ? 0.16 : 0.07))
-                    } else {
-                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                            .fill(Color.primary.opacity(0.02))
+                            .fill(tint.opacity(isHighlighted ? 0.14 : 0.05))
                     }
-                    
-                    // Ambient Top-to-Bottom reflection highlight (Liquid Glass specularity)
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color.white.opacity(0.18),
-                                    Color.white.opacity(0.04),
-                                    Color.clear
-                                ],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
                 }
             )
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .stroke(
-                        LinearGradient(
-                            colors: isHighlighted
-                                ? [Color.white.opacity(0.6), Color.white.opacity(0.2), (tintColor ?? .blue).opacity(0.5)]
-                                : [Color.white.opacity(0.28), Color.white.opacity(0.08)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
+                        tintColor?.opacity(isHighlighted ? 0.5 : 0.2) ?? Color.primary.opacity(isHighlighted ? 0.2 : 0.08),
                         lineWidth: isHighlighted ? 1.5 : 1
                     )
-            )
-            .shadow(
-                color: (tintColor ?? Color.black).opacity(isHighlighted ? 0.18 : 0.08),
-                radius: isHighlighted ? 14 : 8,
-                x: 0,
-                y: isHighlighted ? 6 : 3
             )
     }
 }

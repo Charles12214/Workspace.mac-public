@@ -191,7 +191,7 @@ public struct OnboardingView: View {
         .liquidGlass(cornerRadius: 24)
     }
     
-    // MARK: - Step 2: Welcome to workspace.mac V1.0 (Release Highlights & Roadmap)
+    // MARK: - Step 2: Welcome to workspace.mac V1.2 (Release Highlights & Roadmap)
     private var step2V1OverviewAndRoadmapView: some View {
         VStack(spacing: 16) {
             VStack(spacing: 5) {
@@ -200,32 +200,32 @@ public struct OnboardingView: View {
                         .fill(GeminiPalette.starGradient)
                         .frame(width: 14, height: 14)
                     
-                    Text("WORKSPACE.MAC V1.0 RELEASE")
+                    Text("WORKSPACE.MAC V1.2 RELEASE")
                         .font(.system(size: 11, weight: .heavy, design: .rounded))
                         .foregroundStyle(geminiGradient)
                         .tracking(1.0)
                 }
                 
-                Text("Welcome to workspace.mac V1.0")
+                Text("Welcome to workspace.mac V1.2")
                     .font(.system(size: 25, weight: .bold, design: .rounded))
                     .foregroundStyle(.primary)
                 
-                Text("Your native Google Workspace desktop client. Here's what's included in V1.0 and what's coming next.")
+                Text("Your native Google Workspace desktop client. Here's what's new in V1.2 and what's coming next.")
                     .font(.system(size: 12.5))
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
             }
             
-            // Dual-card layout for V1.0 Features and Roadmap
+            // Dual-card layout for V1.2 Features and Roadmap
             HStack(alignment: .top, spacing: 14) {
-                // Card 1: What's made for V1.0
+                // Card 1: What's new in V1.2
                 VStack(alignment: .leading, spacing: 9) {
                     HStack(spacing: 6) {
                         Image(systemName: "checkmark.seal.fill")
                             .font(.system(size: 13))
                             .foregroundStyle(Color(hex: "34A853"))
                         
-                        Text("What's in V1.0")
+                        Text("What's New in V1.2")
                             .font(.system(size: 13, weight: .bold, design: .rounded))
                             .foregroundStyle(.primary)
                     }
@@ -233,14 +233,29 @@ public struct OnboardingView: View {
                     ScrollView(showsIndicators: false) {
                         VStack(alignment: .leading, spacing: 7) {
                             v1FeatureItem(
+                                icon: "person.2.circle.fill",
+                                title: "Dedicated 5-Account Switcher",
+                                description: "Connect up to 5 isolated local accounts with 1-click switching in the sidebar or settings."
+                            )
+                            v1FeatureItem(
+                                icon: "clock.arrow.circlepath",
+                                title: "Continue Where You Left Off",
+                                description: "Intelligent Home hero card with direct 1-click access to your recent documents."
+                            )
+                            v1FeatureItem(
+                                icon: "arrow.down.circle.fill",
+                                title: "Pre-Downloaded Offline Cache",
+                                description: "Core Workspace apps pre-cached for instant launch & offline access."
+                            )
+                            v1FeatureItem(
+                                icon: "sidebar.right",
+                                title: "Clean Document Canvas",
+                                description: "Permanent removal of Google companion side rail for full-width distraction-free editing."
+                            )
+                            v1FeatureItem(
                                 icon: "square.grid.3x3.fill",
                                 title: "18 Google Workspace Apps",
                                 description: "Docs, Sheets, Slides, Drive, Gmail, Meet, Keep, NotebookLM & more."
-                            )
-                            v1FeatureItem(
-                                icon: "person.2.circle.fill",
-                                title: "Dedicated 5-Account Switcher",
-                                description: "Connect up to 5 isolated Google accounts with 1-click switching in the sidebar or settings."
                             )
                             v1FeatureItem(
                                 icon: "sparkles",
@@ -256,21 +271,6 @@ public struct OnboardingView: View {
                                 icon: "circle.lefthalf.filled",
                                 title: "True macOS Appearance",
                                 description: "Light, Dark, and real-time Auto system theme detection."
-                            )
-                            v1FeatureItem(
-                                icon: "person.crop.circle",
-                                title: "Local Workspace Profile",
-                                description: "Personalized greetings, nickname support, and custom avatar photos."
-                            )
-                            v1FeatureItem(
-                                icon: "touchid",
-                                title: "Google Passkey Support",
-                                description: "Use your Mac Touch ID / Passkey directly inside Google for fast, secure sign-in."
-                            )
-                            v1FeatureItem(
-                                icon: "lock.shield.fill",
-                                title: "Sandboxed Web Session",
-                                description: "Authentic Google login with unified session & 1-click cookie clear."
                             )
                         }
                         .padding(.vertical, 2)
@@ -299,12 +299,6 @@ public struct OnboardingView: View {
                                 color: Color(hex: "1A73E8"),
                                 title: "Inbuilt App Google Login",
                                 description: "Seamless persistent preference sync and single-click profile switching."
-                            )
-                            roadmapItem(
-                                icon: "doc.text.fill",
-                                color: Color(hex: "0F9D58"),
-                                title: "Offline Document Caching",
-                                description: "Local document drafts and offline access for on-the-go productivity."
                             )
                             roadmapItem(
                                 icon: "command",

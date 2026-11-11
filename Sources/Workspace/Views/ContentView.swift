@@ -52,6 +52,7 @@ public struct ContentView: View {
         .preferredColorScheme(state.effectiveColorScheme)
         .sheet(isPresented: $showingSettings) {
             SettingsView(state: state)
+                .frame(width: 640, height: 700)
         }
         .frame(minWidth: 940, minHeight: 620)
     }

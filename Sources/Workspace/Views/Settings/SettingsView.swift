@@ -8,9 +8,19 @@ public struct SettingsView: View {
     @State private var pulseAtAGlance: Bool = false
     @State private var showingClearCookiesAlert: Bool = false
     @State private var cookiesClearedMessage: Bool = false
-    @State private var newAccountName: String = ""
-    @State private var newAccountEmail: String = ""
     @State private var newAccountLabel: String = "Work"
+    @State private var newAccountFirstName: String = ""
+    @State private var newAccountLastName: String = ""
+    @State private var newAccountNickname: String = ""
+    @State private var newAccountUseNickname: Bool = false
+    
+    private func resetNewAccountFields() {
+        newAccountLabel = "Work"
+        newAccountFirstName = ""
+        newAccountLastName = ""
+        newAccountNickname = ""
+        newAccountUseNickname = false
+    }
     
     public init(state: AppState) {
         self.state = state
@@ -174,10 +184,10 @@ public struct SettingsView: View {
                     VStack(alignment: .leading, spacing: 14) {
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("DEDICATED GOOGLE ACCOUNTS")
+                                Text("LOCAL ACCOUNTS (UP TO 5)")
                                     .font(.system(size: 11, weight: .bold))
                                     .foregroundStyle(.secondary)
-                                Text("Switch between up to 5 isolated Google Workspace accounts")
+                                Text("Switch between up to 5 local accounts with separate sessions")
                                     .font(.system(size: 10))
                                     .foregroundStyle(.tertiary)
                             }
@@ -281,45 +291,71 @@ public struct SettingsView: View {
                         if state.accounts.count < AppState.maxAccountsCount {
                             if state.isAddingNewAccount {
                                 VStack(alignment: .leading, spacing: 10) {
-                                    Text("Add New Google Account")
-                                        .font(.system(size: 12, weight: .bold))
+                                    Text("Add New Local Account")
+                                        .font(.system(size: 12.5, weight: .bold))
                                         .foregroundStyle(.primary)
                                     
-                                    HStack(spacing: 8) {
-                                        VStack(alignment: .leading, spacing: 3) {
-                                            Text("Label")
-                                                .font(.system(size: 10, weight: .semibold))
-                                                .foregroundStyle(.secondary)
-                                            TextField("e.g. Work, School", text: $newAccountLabel)
-                                                .textFieldStyle(.roundedBorder)
-                                                .font(.system(size: 11.5))
-                                        }
-                                        .frame(width: 120)
-                                        
-                                        VStack(alignment: .leading, spacing: 3) {
-                                            Text("Name")
-                                                .font(.system(size: 10, weight: .semibold))
-                                                .foregroundStyle(.secondary)
-                                            TextField("Display Name", text: $newAccountName)
-                                                .textFieldStyle(.roundedBorder)
-                                                .font(.system(size: 11.5))
-                                        }
-                                    }
-                                    
+                                    // Label
                                     VStack(alignment: .leading, spacing: 3) {
-                                        Text("Google Email")
+                                        Text("Account Label")
                                             .font(.system(size: 10, weight: .semibold))
                                             .foregroundStyle(.secondary)
-                                        TextField("user@gmail.com or workspace domain", text: $newAccountEmail)
+                                        TextField("e.g. Work, School, Personal", text: $newAccountLabel)
                                             .textFieldStyle(.roundedBorder)
                                             .font(.system(size: 11.5))
                                     }
                                     
+                                    // First Name & Last Name
+                                    HStack(spacing: 8) {
+                                        VStack(alignment: .leading, spacing: 3) {
+                                            Text("First Name")
+                                                .font(.system(size: 10, weight: .semibold))
+                                                .foregroundStyle(.secondary)
+                                            TextField("First Name", text: $newAccountFirstName)
+                                                .textFieldStyle(.roundedBorder)
+                                                .font(.system(size: 11.5))
+                                        }
+                                        
+                                        VStack(alignment: .leading, spacing: 3) {
+                                            HStack(spacing: 4) {
+                                                Text("Last Name")
+                                                    .font(.system(size: 10, weight: .semibold))
+                                                    .foregroundStyle(.secondary)
+                                                Text("(Optional)")
+                                                    .font(.system(size: 9))
+                                                    .foregroundStyle(.secondary)
+                                            }
+                                            TextField("Last Name", text: $newAccountLastName)
+                                                .textFieldStyle(.roundedBorder)
+                                                .font(.system(size: 11.5))
+                                        }
+                                    }
+                                    
+                                    // Nickname
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        HStack(spacing: 4) {
+                                            Text("Nickname")
+                                                .font(.system(size: 10, weight: .semibold))
+                                                .foregroundStyle(.secondary)
+                                            Text("(Optional)")
+                                                .font(.system(size: 9))
+                                                .foregroundStyle(.secondary)
+                                        }
+                                        TextField("Nickname", text: $newAccountNickname)
+                                            .textFieldStyle(.roundedBorder)
+                                            .font(.system(size: 11.5))
+                                    }
+                                    
+                                    Toggle(isOn: $newAccountUseNickname) {
+                                        Text("I want my nickname to be used instead.")
+                                            .font(.system(size: 11.5, weight: .medium))
+                                    }
+                                    .toggleStyle(.checkbox)
+                                    
                                     HStack {
                                         Button("Cancel") {
                                             state.isAddingNewAccount = false
-                                            newAccountName = ""
-                                            newAccountEmail = ""
+                                            resetNewAccountFields()
                                         }
                                         .buttonStyle(.plain)
                                         .font(.system(size: 11))
@@ -328,10 +364,15 @@ public struct SettingsView: View {
                                         Spacer()
                                         
                                         Button("Add & Switch Account") {
-                                            state.addNewAccount(name: newAccountName, email: newAccountEmail, label: newAccountLabel)
+                                            state.addNewAccount(
+                                                label: newAccountLabel,
+                                                firstName: newAccountFirstName,
+                                                lastName: newAccountLastName,
+                                                nickname: newAccountNickname,
+                                                useNickname: newAccountUseNickname
+                                            )
                                             state.isAddingNewAccount = false
-                                            newAccountName = ""
-                                            newAccountEmail = ""
+                                            resetNewAccountFields()
                                         }
                                         .buttonStyle(.plain)
                                         .font(.system(size: 11.5, weight: .semibold))
@@ -339,6 +380,7 @@ public struct SettingsView: View {
                                         .padding(.vertical, 5)
                                         .background(Capsule().fill(Color(hex: "1A73E8")))
                                         .foregroundStyle(.white)
+                                        .disabled(newAccountFirstName.trimmingCharacters(in: .whitespaces).isEmpty)
                                     }
                                     .padding(.top, 4)
                                 }
@@ -352,7 +394,7 @@ public struct SettingsView: View {
                                     HStack(spacing: 6) {
                                         Image(systemName: "plus.circle.fill")
                                             .font(.system(size: 12))
-                                        Text("Add Another Google Account (\(state.accounts.count)/\(AppState.maxAccountsCount))")
+                                        Text("Add Another Local Account (\(state.accounts.count)/\(AppState.maxAccountsCount))")
                                             .font(.system(size: 12, weight: .semibold))
                                     }
                                     .foregroundStyle(Color(hex: "1A73E8"))
@@ -464,22 +506,17 @@ public struct SettingsView: View {
                             }
                             .toggleStyle(.checkbox)
                             
-                            HStack(spacing: 6) {
-                                Image(systemName: "sparkles")
-                                    .font(.system(size: 11))
-                                    .foregroundStyle(GeminiPalette.blue)
-                                HStack {
-                                    Spacer()
-                                    Button("Clear & Reset Profile") {
-                                        state.userProfile = .empty
-                                        state.saveUserProfile()
-                                    }
-                                    .font(.system(size: 11, weight: .medium))
-                                    .buttonStyle(.plain)
-                                    .foregroundStyle(.secondary)
+                            HStack {
+                                Spacer()
+                                Button("Clear & Reset Profile") {
+                                    state.userProfile = .empty
+                                    state.saveUserProfile()
                                 }
-                                .padding(.top, 4)
+                                .font(.system(size: 11, weight: .medium))
+                                .buttonStyle(.plain)
+                                .foregroundStyle(.secondary)
                             }
+                            .padding(.top, 4)
                         }
                     }
                     .padding(16)

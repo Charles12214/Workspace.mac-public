@@ -71,7 +71,7 @@ public struct SidebarView: View {
                     .popover(isPresented: $isShowingAccountSwitcher, arrowEdge: .bottom) {
                         accountSwitcherPopover
                     }
-                    .help("Quick Account Switcher (Click to switch between up to 5 Google accounts)")
+                    .help("Quick Account Switcher (Click to switch between up to 5 local accounts)")
                     
                     Spacer()
                     
@@ -282,7 +282,7 @@ public struct SidebarView: View {
                             Image(systemName: "person.crop.circle.badge.plus")
                                 .font(.system(size: 12))
                                 .foregroundStyle(Color(hex: "1A73E8"))
-                            Text("Add Google Account (\(state.accounts.count)/\(AppState.maxAccountsCount))...")
+                            Text("Add Local Account (\(state.accounts.count)/\(AppState.maxAccountsCount))...")
                                 .font(.system(size: 11.5))
                             Spacer()
                         }
