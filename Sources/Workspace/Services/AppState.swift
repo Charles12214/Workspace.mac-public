@@ -16,6 +16,9 @@ public final class AppState: ObservableObject {
     private let kHideTileTitlesKey = "Workspace_HideTileTitles"
     private let kIsSidebarCollapsedKey = "Workspace_IsSidebarCollapsed"
     private let kLastOpenedDocumentKey = "Workspace_LastOpenedDocument"
+    public static let maxAccountsCount = 5
+    private let kAccountsKey = "Workspace_Accounts_V2"
+    private let kActiveAccountIdKey = "Workspace_ActiveAccountId"
     
     // MARK: - Published State
     @Published public var apps: [WorkspaceAppItem] = []
@@ -28,9 +31,32 @@ public final class AppState: ObservableObject {
     }
     @Published public var overrideUrlForApp: [String: URL] = [:]
     
-    // Exactly ONE account per login for the app
-    @Published public var userProfile: UserProfile {
-        didSet { saveUserProfile() }
+    // Dedicated Multi-Account Storage (Up to 5 accounts)
+    @Published public var accounts: [UserProfile] = []
+    @Published public var activeAccountId: String = ""
+    @Published public var isAddingNewAccount: Bool = false
+    
+    public var activeAccount: UserProfile {
+        if let acc = accounts.first(where: { $0.accountId == activeAccountId }) {
+            return acc
+        }
+        return accounts.first ?? .default
+    }
+    
+    // Current active user profile
+    public var userProfile: UserProfile {
+        get {
+            activeAccount
+        }
+        set {
+            if let idx = accounts.firstIndex(where: { $0.accountId == activeAccountId }) {
+                accounts[idx] = newValue
+                saveAccounts()
+            } else if !accounts.isEmpty {
+                accounts[0] = newValue
+                saveAccounts()
+            }
+        }
     }
     
     @Published public var appearanceMode: AppearanceMode {
@@ -151,12 +177,30 @@ public final class AppState: ObservableObject {
             self.appearanceMode = .dark
         }
         
-        // Load User Profile (Local Workspace Profile)
-        if let data = UserDefaults.standard.data(forKey: kUserProfileKey),
-           let profile = try? JSONDecoder().decode(UserProfile.self, from: data) {
-            self.userProfile = profile
+        // Load Dedicated Accounts (Up to 5 accounts)
+        if let data = UserDefaults.standard.data(forKey: "Workspace_Accounts_V2"),
+           let savedAccounts = try? JSONDecoder().decode([UserProfile].self, from: data),
+           !savedAccounts.isEmpty {
+            self.accounts = Array(savedAccounts.prefix(Self.maxAccountsCount))
+            let savedActiveId = UserDefaults.standard.string(forKey: "Workspace_ActiveAccountId") ?? ""
+            if self.accounts.contains(where: { $0.accountId == savedActiveId }) {
+                self.activeAccountId = savedActiveId
+            } else {
+                self.activeAccountId = self.accounts.first?.accountId ?? ""
+            }
         } else {
-            self.userProfile = .default
+            // Migrate single legacy userProfile if present, otherwise default
+            var initialProfile: UserProfile = .default
+            if let legacyData = UserDefaults.standard.data(forKey: kUserProfileKey),
+               let profile = try? JSONDecoder().decode(UserProfile.self, from: legacyData) {
+                initialProfile = profile
+            }
+            if initialProfile.accountId.isEmpty {
+                initialProfile.accountId = UUID().uuidString
+            }
+            self.accounts = [initialProfile]
+            self.activeAccountId = initialProfile.accountId
+            saveAccounts()
         }
         
         // Populate apps catalog
@@ -658,8 +702,99 @@ public final class AppState: ObservableObject {
     }
     
     public func saveUserProfile() {
-        if let data = try? JSONEncoder().encode(userProfile) {
-            UserDefaults.standard.set(data, forKey: kUserProfileKey)
+        saveAccounts()
+    }
+    
+    public func saveAccounts() {
+        if let data = try? JSONEncoder().encode(accounts) {
+            UserDefaults.standard.set(data, forKey: kAccountsKey)
+        }
+        UserDefaults.standard.set(activeAccountId, forKey: kActiveAccountIdKey)
+        if let active = accounts.first(where: { $0.accountId == activeAccountId }),
+           let legacyData = try? JSONEncoder().encode(active) {
+            UserDefaults.standard.set(legacyData, forKey: kUserProfileKey)
+        }
+    }
+    
+    public func dataStore(for account: UserProfile) -> WKWebsiteDataStore {
+        if #available(macOS 14.0, *) {
+            return WKWebsiteDataStore(forIdentifier: account.dataStoreUuid)
+        } else {
+            return WKWebsiteDataStore.default()
+        }
+    }
+    
+    public var activeDataStore: WKWebsiteDataStore {
+        dataStore(for: activeAccount)
+    }
+    
+    public func switchAccount(to accountId: String) {
+        guard activeAccountId != accountId,
+              accounts.contains(where: { $0.accountId == accountId }) else { return }
+        
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+            activeAccountId = accountId
+        }
+        UserDefaults.standard.set(activeAccountId, forKey: kActiveAccountIdKey)
+        
+        if selectedAppId != nil {
+            webViewActionSignal = .reload
+        }
+    }
+    
+    public func addNewAccount(name: String, email: String, label: String = "") {
+        guard accounts.count < Self.maxAccountsCount else { return }
+        let cleanEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanName = name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? (cleanEmail.components(separatedBy: "@").first?.capitalized ?? "Google Account \(accounts.count + 1)")
+            : name.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        let finalLabel = label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? "Account \(accounts.count + 1)"
+            : label.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        let newAccount = UserProfile(
+            accountId: UUID().uuidString,
+            dataStoreUuid: UUID(),
+            accountLabel: finalLabel,
+            name: cleanName,
+            firstName: cleanName.components(separatedBy: " ").first ?? cleanName,
+            lastName: cleanName.components(separatedBy: " ").dropFirst().joined(separator: " "),
+            email: cleanEmail,
+            isLoggedIn: !cleanEmail.isEmpty
+        )
+        
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+            accounts.append(newAccount)
+            activeAccountId = newAccount.accountId
+        }
+        saveAccounts()
+        
+        if selectedAppId != nil {
+            webViewActionSignal = .reload
+        }
+    }
+    
+    public func removeAccount(accountId: String) {
+        guard accounts.count > 1 else { return }
+        guard let idx = accounts.firstIndex(where: { $0.accountId == accountId }) else { return }
+        
+        let toRemove = accounts[idx]
+        withAnimation(.easeInOut(duration: 0.2)) {
+            accounts.remove(at: idx)
+            if activeAccountId == accountId {
+                activeAccountId = accounts.first?.accountId ?? ""
+            }
+        }
+        saveAccounts()
+        
+        if #available(macOS 14.0, *) {
+            let store = WKWebsiteDataStore(forIdentifier: toRemove.dataStoreUuid)
+            store.removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), modifiedSince: .distantPast) { }
+        }
+        
+        if selectedAppId != nil {
+            webViewActionSignal = .reload
         }
     }
     
@@ -721,9 +856,9 @@ public final class AppState: ObservableObject {
         }
     }
     
-    // MARK: - Thorough WebKit & Cookie Purge
+    // MARK: - Thorough WebKit & Cookie Purge (Active Account)
     public func clearWebKitCookies(completion: (() -> Void)? = nil) {
-        let dataStore = WKWebsiteDataStore.default()
+        let dataStore = activeDataStore
         let dataTypes = WKWebsiteDataStore.allWebsiteDataTypes()
         
         dataStore.removeData(ofTypes: dataTypes, modifiedSince: Date.distantPast) {
@@ -739,7 +874,7 @@ public final class AppState: ObservableObject {
                 group.notify(queue: .main) {
                     HTTPCookieStorage.shared.removeCookies(since: .distantPast)
                     URLCache.shared.removeAllCachedResponses()
-                    print("Workspace: All WebKit cookies, caches, and Google sessions purged.")
+                    print("Workspace: All WebKit cookies, caches, and Google sessions purged for active account.")
                     completion?()
                 }
             }

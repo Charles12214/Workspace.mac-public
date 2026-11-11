@@ -8,6 +8,9 @@ public struct SettingsView: View {
     @State private var pulseAtAGlance: Bool = false
     @State private var showingClearCookiesAlert: Bool = false
     @State private var cookiesClearedMessage: Bool = false
+    @State private var newAccountName: String = ""
+    @State private var newAccountEmail: String = ""
+    @State private var newAccountLabel: String = "Work"
     
     public init(state: AppState) {
         self.state = state
@@ -163,6 +166,201 @@ public struct SettingsView: View {
                         Text("When enabled, Home screen tiles display minimalist enlarged icon watermarks without text, while full titles remain in the sidebar.")
                             .font(.system(size: 11))
                             .foregroundStyle(.secondary)
+                    }
+                    .padding(16)
+                    .liquidGlass(cornerRadius: 14)
+                    
+                    // MARK: - Dedicated Multi-Account Switcher (Up to 5 Accounts)
+                    VStack(alignment: .leading, spacing: 14) {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("DEDICATED GOOGLE ACCOUNTS")
+                                    .font(.system(size: 11, weight: .bold))
+                                    .foregroundStyle(.secondary)
+                                Text("Switch between up to 5 isolated Google Workspace accounts")
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(.tertiary)
+                            }
+                            
+                            Spacer()
+                            
+                            Text("\(state.accounts.count)/\(AppState.maxAccountsCount) Accounts")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundStyle(Color(hex: "1A73E8"))
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(Capsule().fill(Color(hex: "1A73E8").opacity(0.1)))
+                        }
+                        
+                        // Accounts List
+                        VStack(spacing: 8) {
+                            ForEach(state.accounts) { account in
+                                let isActive = account.accountId == state.activeAccountId
+                                HStack(spacing: 12) {
+                                    GoogleProfileAvatarView(
+                                        avatarData: account.avatarImageData,
+                                        name: account.displayName,
+                                        size: 34,
+                                        tier: account.tier,
+                                        showEditButton: false
+                                    )
+                                    
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        HStack(spacing: 6) {
+                                            Text(account.displayName)
+                                                .font(.system(size: 13, weight: .bold))
+                                                .foregroundStyle(.primary)
+                                            
+                                            Text(account.accountLabel)
+                                                .font(.system(size: 9.5, weight: .semibold))
+                                                .padding(.horizontal, 6)
+                                                .padding(.vertical, 1.5)
+                                                .background(Capsule().fill(Color.primary.opacity(0.06)))
+                                                .foregroundStyle(.secondary)
+                                        }
+                                        
+                                        Text(account.email.isEmpty ? "No Google email configured" : account.email)
+                                            .font(.system(size: 11))
+                                            .foregroundStyle(.secondary)
+                                            .lineLimit(1)
+                                    }
+                                    
+                                    Spacer()
+                                    
+                                    if isActive {
+                                        HStack(spacing: 4) {
+                                            Image(systemName: "checkmark.circle.fill")
+                                                .font(.system(size: 11))
+                                            Text("Active")
+                                                .font(.system(size: 11, weight: .bold))
+                                        }
+                                        .foregroundStyle(Color(hex: "0F9D58"))
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 4)
+                                        .background(Capsule().fill(Color(hex: "0F9D58").opacity(0.12)))
+                                    } else {
+                                        Button(action: {
+                                            state.switchAccount(to: account.accountId)
+                                        }) {
+                                            Text("Switch")
+                                                .font(.system(size: 11, weight: .semibold))
+                                                .padding(.horizontal, 12)
+                                                .padding(.vertical, 4)
+                                                .background(Capsule().fill(Color(hex: "1A73E8")))
+                                                .foregroundStyle(.white)
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                    
+                                    if state.accounts.count > 1 {
+                                        Button(action: {
+                                            state.removeAccount(accountId: account.accountId)
+                                        }) {
+                                            Image(systemName: "trash")
+                                                .font(.system(size: 11))
+                                                .foregroundStyle(Color.red.opacity(0.7))
+                                                .padding(6)
+                                        }
+                                        .buttonStyle(.plain)
+                                        .help("Remove this account")
+                                    }
+                                }
+                                .padding(10)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                        .fill(isActive ? Color(hex: "1A73E8").opacity(0.06) : Color.primary.opacity(0.02))
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                        .stroke(isActive ? Color(hex: "1A73E8").opacity(0.4) : Color.primary.opacity(0.05), lineWidth: 1)
+                                )
+                            }
+                        }
+                        
+                        // Add Account Area
+                        if state.accounts.count < AppState.maxAccountsCount {
+                            if state.isAddingNewAccount {
+                                VStack(alignment: .leading, spacing: 10) {
+                                    Text("Add New Google Account")
+                                        .font(.system(size: 12, weight: .bold))
+                                        .foregroundStyle(.primary)
+                                    
+                                    HStack(spacing: 8) {
+                                        VStack(alignment: .leading, spacing: 3) {
+                                            Text("Label")
+                                                .font(.system(size: 10, weight: .semibold))
+                                                .foregroundStyle(.secondary)
+                                            TextField("e.g. Work, School", text: $newAccountLabel)
+                                                .textFieldStyle(.roundedBorder)
+                                                .font(.system(size: 11.5))
+                                        }
+                                        .frame(width: 120)
+                                        
+                                        VStack(alignment: .leading, spacing: 3) {
+                                            Text("Name")
+                                                .font(.system(size: 10, weight: .semibold))
+                                                .foregroundStyle(.secondary)
+                                            TextField("Display Name", text: $newAccountName)
+                                                .textFieldStyle(.roundedBorder)
+                                                .font(.system(size: 11.5))
+                                        }
+                                    }
+                                    
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text("Google Email")
+                                            .font(.system(size: 10, weight: .semibold))
+                                            .foregroundStyle(.secondary)
+                                        TextField("user@gmail.com or workspace domain", text: $newAccountEmail)
+                                            .textFieldStyle(.roundedBorder)
+                                            .font(.system(size: 11.5))
+                                    }
+                                    
+                                    HStack {
+                                        Button("Cancel") {
+                                            state.isAddingNewAccount = false
+                                            newAccountName = ""
+                                            newAccountEmail = ""
+                                        }
+                                        .buttonStyle(.plain)
+                                        .font(.system(size: 11))
+                                        .foregroundStyle(.secondary)
+                                        
+                                        Spacer()
+                                        
+                                        Button("Add & Switch Account") {
+                                            state.addNewAccount(name: newAccountName, email: newAccountEmail, label: newAccountLabel)
+                                            state.isAddingNewAccount = false
+                                            newAccountName = ""
+                                            newAccountEmail = ""
+                                        }
+                                        .buttonStyle(.plain)
+                                        .font(.system(size: 11.5, weight: .semibold))
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 5)
+                                        .background(Capsule().fill(Color(hex: "1A73E8")))
+                                        .foregroundStyle(.white)
+                                    }
+                                    .padding(.top, 4)
+                                }
+                                .padding(12)
+                                .background(RoundedRectangle(cornerRadius: 10).fill(Color.primary.opacity(0.04)))
+                                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color(hex: "1A73E8").opacity(0.3), lineWidth: 1))
+                            } else {
+                                Button(action: {
+                                    state.isAddingNewAccount = true
+                                }) {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "plus.circle.fill")
+                                            .font(.system(size: 12))
+                                        Text("Add Another Google Account (\(state.accounts.count)/\(AppState.maxAccountsCount))")
+                                            .font(.system(size: 12, weight: .semibold))
+                                    }
+                                    .foregroundStyle(Color(hex: "1A73E8"))
+                                    .padding(.vertical, 4)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
                     }
                     .padding(16)
                     .liquidGlass(cornerRadius: 14)

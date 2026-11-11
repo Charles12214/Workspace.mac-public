@@ -238,6 +238,11 @@ public struct OnboardingView: View {
                                 description: "Docs, Sheets, Slides, Drive, Gmail, Meet, Keep, NotebookLM & more."
                             )
                             v1FeatureItem(
+                                icon: "person.2.circle.fill",
+                                title: "Dedicated 5-Account Switcher",
+                                description: "Connect up to 5 isolated Google accounts with 1-click switching in the sidebar or settings."
+                            )
+                            v1FeatureItem(
                                 icon: "sparkles",
                                 title: "Gemini AI Integration",
                                 description: "Dedicated Gemini AI assistant built right into your workspace."
@@ -728,6 +733,13 @@ public struct OnboardingView: View {
                         color: Color(hex: "1A73E8"),
                         title: "Single Sign-In for All Apps",
                         description: "Because Workspace.mac shares a sandboxed WebKit data store, logging into Google in one app keeps you logged in across Sheets, Slides, Drive, and Gmail."
+                    )
+                    
+                    guideBulletRow(
+                        icon: "person.2.circle.fill",
+                        color: Color(hex: "00A4F9"),
+                        title: "Up to 5 Dedicated Google Accounts",
+                        description: "Add up to 5 separate Google accounts (Work, Personal, School). Each account runs in an isolated container so all accounts stay signed in without logging out."
                     )
                     
                     guideBulletRow(

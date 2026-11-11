@@ -31,32 +31,76 @@ public struct SidebarView: View {
         VStack(spacing: 0) {
             // MARK: - TOP LEFT: Account Details & Window Controls
             VStack(spacing: 12) {
-                HStack(alignment: .center, spacing: 10) {
-                    // Profile Header - Shows current active single account
-                    Button(action: { showingSettings = true }) {
-                        HStack(alignment: .center, spacing: 10) {
+                HStack(alignment: .center, spacing: 8) {
+                    // Profile Header & Quick Account Switcher Menu
+                    Menu {
+                        Section("Switch Google Account (Up to 5)") {
+                            ForEach(state.accounts) { account in
+                                Button(action: {
+                                    state.switchAccount(to: account.accountId)
+                                }) {
+                                    HStack {
+                                        if account.accountId == state.activeAccountId {
+                                            Image(systemName: "checkmark")
+                                        }
+                                        Text(account.displayName)
+                                        if !account.email.isEmpty {
+                                            Text("• \(account.email)")
+                                        }
+                                        Text("[\(account.accountLabel)]")
+                                    }
+                                }
+                            }
+                        }
+                        
+                        Divider()
+                        
+                        if state.accounts.count < AppState.maxAccountsCount {
+                            Button(action: {
+                                state.isAddingNewAccount = true
+                                showingSettings = true
+                            }) {
+                                Label("Add Google Account (\(state.accounts.count)/5)...", systemImage: "person.crop.circle.badge.plus")
+                            }
+                        }
+                        
+                        Button(action: {
+                            showingSettings = true
+                        }) {
+                            Label("Manage Accounts in Settings...", systemImage: "gearshape")
+                        }
+                    } label: {
+                        HStack(alignment: .center, spacing: 8) {
                             GoogleProfileAvatarView(
                                 avatarData: state.userProfile.avatarImageData,
                                 name: state.userProfile.displayName,
-                                size: 40,
+                                size: 36,
                                 tier: state.userProfile.tier,
                                 showEditButton: false
                             )
                             
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(state.userProfile.displayName)
-                                    .font(.system(size: 13.5, weight: .bold))
-                                    .lineLimit(1)
+                                HStack(spacing: 4) {
+                                    Text(state.userProfile.displayName)
+                                        .font(.system(size: 13, weight: .bold))
+                                        .lineLimit(1)
+                                    
+                                    // Quick Switcher Arrow
+                                    Image(systemName: "chevron.up.chevron.down")
+                                        .font(.system(size: 8.5, weight: .bold))
+                                        .foregroundStyle(Color(hex: "1A73E8"))
+                                }
                                 
-                                Text(state.userProfile.email.isEmpty ? "Workspace Profile" : state.userProfile.email)
+                                Text(state.userProfile.email.isEmpty ? state.userProfile.accountLabel : state.userProfile.email)
                                     .font(.system(size: 10))
                                     .foregroundStyle(.secondary)
                                     .lineLimit(1)
                             }
                         }
+                        .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
-                    .help("View Account Settings")
+                    .menuStyle(.borderlessButton)
+                    .help("Quick Account Switcher (Click to switch between up to 5 Google accounts)")
                     
                     Spacer()
                     

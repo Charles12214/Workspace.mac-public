@@ -173,7 +173,7 @@ public struct WebKitRepresentable: NSViewRepresentable {
     
     public func makeNSView(context: Context) -> WKWebView {
         let configuration = WKWebViewConfiguration()
-        configuration.websiteDataStore = WKWebsiteDataStore.default()
+        configuration.websiteDataStore = AppState.shared.activeDataStore
         configuration.preferences.setValue(true, forKey: "developerExtrasEnabled")
         
         // Match exact native Safari 27.2 User-Agent on macOS

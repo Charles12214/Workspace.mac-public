@@ -122,6 +122,7 @@ public struct WorkspaceAppContainer: View {
                                 currentUrlString: $currentUrlString,
                                 pageTitle: $pageTitle
                             )
+                            .id("\(app.id)_\(state.activeAccountId)")
                             .ignoresSafeArea()
                             
                             // Top loading line

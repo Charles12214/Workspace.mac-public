@@ -186,8 +186,11 @@ public struct RecentDocumentItem: Codable, Equatable, Sendable, Identifiable {
 // MARK: - User Profile
 public struct UserProfile: Codable, Equatable, Sendable, Identifiable {
     public var id: String {
-        email.isEmpty ? name : email
+        accountId
     }
+    public var accountId: String
+    public var dataStoreUuid: UUID
+    public var accountLabel: String
     public var name: String
     public var firstName: String
     public var lastName: String
@@ -201,6 +204,9 @@ public struct UserProfile: Codable, Equatable, Sendable, Identifiable {
     public var hasPasskey: Bool
     
     public init(
+        accountId: String = UUID().uuidString,
+        dataStoreUuid: UUID = UUID(),
+        accountLabel: String = "Personal",
         name: String,
         firstName: String = "",
         lastName: String = "",
@@ -213,6 +219,9 @@ public struct UserProfile: Codable, Equatable, Sendable, Identifiable {
         isLoggedIn: Bool = true,
         hasPasskey: Bool = false
     ) {
+        self.accountId = accountId
+        self.dataStoreUuid = dataStoreUuid
+        self.accountLabel = accountLabel
         self.name = name
         self.firstName = firstName
         self.lastName = lastName
@@ -228,6 +237,9 @@ public struct UserProfile: Codable, Equatable, Sendable, Identifiable {
     
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.accountId = try container.decodeIfPresent(String.self, forKey: .accountId) ?? UUID().uuidString
+        self.dataStoreUuid = try container.decodeIfPresent(UUID.self, forKey: .dataStoreUuid) ?? UUID()
+        self.accountLabel = try container.decodeIfPresent(String.self, forKey: .accountLabel) ?? "Account"
         self.name = try container.decode(String.self, forKey: .name)
         self.firstName = try container.decodeIfPresent(String.self, forKey: .firstName) ?? ""
         self.lastName = try container.decodeIfPresent(String.self, forKey: .lastName) ?? ""
