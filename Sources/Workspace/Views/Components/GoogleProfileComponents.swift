@@ -55,70 +55,81 @@ public struct GoogleProfileAvatarView: View {
     }
     
     public var body: some View {
-        Button(action: { action?() }) {
-            ZStack(alignment: .bottomTrailing) {
-                // Main Avatar Circle with Clean Border
-                ZStack {
-                    // Inner profile image, initial, or standard PFP icon
-                    Group {
-                        if let data = avatarData,
-                           let nsImg = NSImage(data: data) {
-                            Image(nsImage: nsImg)
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                        } else {
-                            ZStack {
-                                // Simple, clean dark grey circle
-                                Circle()
-                                    .fill(Color(hex: "374151"))
-                                
-                                let cleanName = name.trimmingCharacters(in: .whitespaces)
-                                if !cleanName.isEmpty && cleanName != "Workspace User" {
-                                    // Start with the first letter of the first name
-                                    Text(String(cleanName.prefix(1)).uppercased())
-                                        .font(.system(size: size * 0.44, weight: .bold, design: .rounded))
-                                        .foregroundStyle(.white)
-                                } else {
-                                    // Standard PFP icon
-                                    Image(systemName: "person.fill")
-                                        .resizable()
-                                        .aspectRatio(contentMode: .fit)
-                                        .foregroundStyle(.white.opacity(0.85))
-                                        .padding(size * 0.22)
-                                }
+        let avatarContent = ZStack(alignment: .bottomTrailing) {
+            // Main Avatar Circle with Clean Border
+            ZStack {
+                // Inner profile image, initial, or standard PFP icon
+                Group {
+                    if let data = avatarData,
+                       let nsImg = NSImage(data: data) {
+                        let _ = {
+                            nsImg.size = NSSize(width: size, height: size)
+                        }()
+                        Image(nsImage: nsImg)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: size - 2, height: size - 2)
+                            .clipped()
+                    } else {
+                        ZStack {
+                            // Simple, clean dark grey circle
+                            Circle()
+                                .fill(Color(hex: "374151"))
+                            
+                            let cleanName = name.trimmingCharacters(in: .whitespaces)
+                            if !cleanName.isEmpty && cleanName != "Workspace User" {
+                                // Start with the first letter of the first name
+                                Text(String(cleanName.prefix(1)).uppercased())
+                                    .font(.system(size: size * 0.44, weight: .bold, design: .rounded))
+                                    .foregroundStyle(.white)
+                            } else {
+                                // Standard PFP icon
+                                Image(systemName: "person.fill")
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fit)
+                                    .foregroundStyle(.white.opacity(0.85))
+                                    .padding(size * 0.22)
                             }
                         }
                     }
-                    .frame(width: size - 2, height: size - 2)
-                    .clipShape(Circle())
-                    
-                    // Simple, clean subtle border
-                    Circle()
-                        .strokeBorder(Color.primary.opacity(0.12), lineWidth: 1.0)
-                        .frame(width: size, height: size)
                 }
-                .frame(width: size, height: size)
+                .frame(width: size - 2, height: size - 2)
+                .clipShape(Circle())
                 
-                // Edit Pencil Button in bottom-right corner (as in reference image)
-                if showEditButton {
-                    ZStack {
-                        Circle()
-                            .fill(Color(hex: "1F2328"))
-                            .frame(width: size * 0.36, height: size * 0.36)
-                        
-                        Circle()
-                            .stroke(Color(nsColor: .windowBackgroundColor), lineWidth: 1.5)
-                            .frame(width: size * 0.36, height: size * 0.36)
-                        
-                        Image(systemName: "pencil")
-                            .font(.system(size: size * 0.18, weight: .bold))
-                            .foregroundStyle(.white)
-                    }
-                    .offset(x: size * 0.04, y: size * 0.04)
+                // Simple, clean subtle border
+                Circle()
+                    .strokeBorder(Color.primary.opacity(0.12), lineWidth: 1.0)
+                    .frame(width: size, height: size)
+            }
+            .frame(width: size, height: size)
+            
+            // Edit Pencil Button in bottom-right corner (as in reference image)
+            if showEditButton {
+                ZStack {
+                    Circle()
+                        .fill(Color(hex: "1F2328"))
+                        .frame(width: size * 0.36, height: size * 0.36)
+                    
+                    Circle()
+                        .stroke(Color(nsColor: .windowBackgroundColor), lineWidth: 1.5)
+                        .frame(width: size * 0.36, height: size * 0.36)
+                    
+                    Image(systemName: "pencil")
+                        .font(.system(size: size * 0.18, weight: .bold))
+                        .foregroundStyle(.white)
                 }
+                .offset(x: size * 0.04, y: size * 0.04)
             }
         }
-        .buttonStyle(.plain)
+        
+        if let action = action {
+            Button(action: action) {
+                avatarContent
+            }
+            .buttonStyle(.plain)
+        } else {
+            avatarContent
+        }
     }
 }
 

@@ -212,7 +212,7 @@ public struct WorkspaceAppContainer: View {
                     
                     HStack(spacing: 0) {
                         SidebarView(state: state, showingSettings: $showingSettings)
-                            .frame(width: state.isSidebarCollapsed ? 58 : 255)
+                            .frame(width: state.isSidebarCollapsed ? 58 : 260)
                             .background(Color(nsColor: .windowBackgroundColor))
                             .shadow(color: Color.black.opacity(0.4), radius: 16, x: 6, y: 0)
                             .transition(.move(edge: .leading))

@@ -4,6 +4,7 @@ import AppKit
 public struct SidebarView: View {
     @ObservedObject var state: AppState
     @Binding var showingSettings: Bool
+    @State private var isShowingAccountSwitcher: Bool = false
     
     public init(state: AppState, showingSettings: Binding<Bool>) {
         self.state = state
@@ -18,6 +19,7 @@ public struct SidebarView: View {
                 expandedSidebar
             }
         }
+        .frame(width: state.isSidebarCollapsed ? 58 : 260)
         .background(
             ZStack {
                 Rectangle().fill(Color(nsColor: .windowBackgroundColor))
@@ -32,49 +34,15 @@ public struct SidebarView: View {
             // MARK: - TOP LEFT: Account Details & Window Controls
             VStack(spacing: 12) {
                 HStack(alignment: .center, spacing: 8) {
-                    // Profile Header & Quick Account Switcher Menu
-                    Menu {
-                        Section("Switch Google Account (Up to 5)") {
-                            ForEach(state.accounts) { account in
-                                Button(action: {
-                                    state.switchAccount(to: account.accountId)
-                                }) {
-                                    HStack {
-                                        if account.accountId == state.activeAccountId {
-                                            Image(systemName: "checkmark")
-                                        }
-                                        Text(account.displayName)
-                                        if !account.email.isEmpty {
-                                            Text("• \(account.email)")
-                                        }
-                                        Text("[\(account.accountLabel)]")
-                                    }
-                                }
-                            }
-                        }
-                        
-                        Divider()
-                        
-                        if state.accounts.count < AppState.maxAccountsCount {
-                            Button(action: {
-                                state.isAddingNewAccount = true
-                                showingSettings = true
-                            }) {
-                                Label("Add Google Account (\(state.accounts.count)/5)...", systemImage: "person.crop.circle.badge.plus")
-                            }
-                        }
-                        
-                        Button(action: {
-                            showingSettings = true
-                        }) {
-                            Label("Manage Accounts in Settings...", systemImage: "gearshape")
-                        }
-                    } label: {
+                    // Profile Header & Quick Account Switcher (Plain button with Popover - immune to AppKit Menu bugs)
+                    Button(action: {
+                        isShowingAccountSwitcher.toggle()
+                    }) {
                         HStack(alignment: .center, spacing: 8) {
                             GoogleProfileAvatarView(
                                 avatarData: state.userProfile.avatarImageData,
                                 name: state.userProfile.displayName,
-                                size: 36,
+                                size: 34,
                                 tier: state.userProfile.tier,
                                 showEditButton: false
                             )
@@ -99,7 +67,10 @@ public struct SidebarView: View {
                         }
                         .contentShape(Rectangle())
                     }
-                    .menuStyle(.borderlessButton)
+                    .buttonStyle(.plain)
+                    .popover(isPresented: $isShowingAccountSwitcher, arrowEdge: .bottom) {
+                        accountSwitcherPopover
+                    }
                     .help("Quick Account Switcher (Click to switch between up to 5 Google accounts)")
                     
                     Spacer()
@@ -208,7 +179,143 @@ public struct SidebarView: View {
                 .padding(.vertical, 6)
             }
         }
-        .frame(minWidth: 260, maxWidth: 280)
+        .frame(width: 260)
+    }
+    
+    // MARK: - Account Switcher Popover
+    private var accountSwitcherPopover: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Header
+            HStack {
+                Text("Google Accounts")
+                    .font(.system(size: 12, weight: .bold))
+                Spacer()
+                Text("\(state.accounts.count)/\(AppState.maxAccountsCount)")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Capsule().fill(Color.primary.opacity(0.08)))
+            }
+            .padding(.horizontal, 14)
+            .padding(.top, 12)
+            .padding(.bottom, 8)
+            
+            Divider().opacity(0.3)
+            
+            // Accounts List
+            ScrollView {
+                VStack(spacing: 3) {
+                    ForEach(state.accounts) { account in
+                        let isActive = account.accountId == state.activeAccountId
+                        Button(action: {
+                            state.switchAccount(to: account.accountId)
+                            isShowingAccountSwitcher = false
+                        }) {
+                            HStack(spacing: 10) {
+                                GoogleProfileAvatarView(
+                                    avatarData: account.avatarImageData,
+                                    name: account.displayName,
+                                    size: 28,
+                                    tier: account.tier,
+                                    showEditButton: false
+                                )
+                                
+                                VStack(alignment: .leading, spacing: 1.5) {
+                                    HStack(spacing: 4) {
+                                        Text(account.displayName)
+                                            .font(.system(size: 12, weight: isActive ? .bold : .medium))
+                                            .foregroundStyle(Color.primary)
+                                            .lineLimit(1)
+                                        
+                                        Text(account.accountLabel)
+                                            .font(.system(size: 9, weight: .semibold))
+                                            .foregroundStyle(Color(hex: "1A73E8"))
+                                            .padding(.horizontal, 4)
+                                            .padding(.vertical, 1)
+                                            .background(Color(hex: "1A73E8").opacity(0.12))
+                                            .clipShape(RoundedRectangle(cornerRadius: 3))
+                                    }
+                                    
+                                    if !account.email.isEmpty {
+                                        Text(account.email)
+                                            .font(.system(size: 10))
+                                            .foregroundStyle(.secondary)
+                                            .lineLimit(1)
+                                    }
+                                }
+                                
+                                Spacer()
+                                
+                                if isActive {
+                                    Image(systemName: "checkmark")
+                                        .font(.system(size: 11, weight: .bold))
+                                        .foregroundStyle(Color(hex: "1A73E8"))
+                                }
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .fill(isActive ? Color(hex: "1A73E8").opacity(0.1) : Color.clear)
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 6)
+                .padding(.vertical, 6)
+            }
+            .frame(maxHeight: 200)
+            
+            Divider().opacity(0.3)
+            
+            // Actions
+            VStack(spacing: 2) {
+                if state.accounts.count < AppState.maxAccountsCount {
+                    Button(action: {
+                        isShowingAccountSwitcher = false
+                        state.isAddingNewAccount = true
+                        showingSettings = true
+                    }) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "person.crop.circle.badge.plus")
+                                .font(.system(size: 12))
+                                .foregroundStyle(Color(hex: "1A73E8"))
+                            Text("Add Google Account (\(state.accounts.count)/\(AppState.maxAccountsCount))...")
+                                .font(.system(size: 11.5))
+                            Spacer()
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+                
+                Button(action: {
+                    isShowingAccountSwitcher = false
+                    showingSettings = true
+                }) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "gearshape")
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                        Text("Manage Accounts in Settings...")
+                            .font(.system(size: 11.5))
+                        Spacer()
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 6)
+            .padding(.vertical, 6)
+        }
+        .frame(width: 260)
+        .background(Color(nsColor: .windowBackgroundColor))
     }
     
     // MARK: - Collapsed Rail Sidebar
