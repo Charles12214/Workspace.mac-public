@@ -205,11 +205,6 @@ public final class AppState: ObservableObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in
             self?.checkForUpdates()
         }
-        
-        // Pre-warm offline workspace application cache in background
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3.5) {
-            OfflineCacheService.shared.prewarmOfflineCache()
-        }
     }
     
     public var effectiveColorScheme: ColorScheme {

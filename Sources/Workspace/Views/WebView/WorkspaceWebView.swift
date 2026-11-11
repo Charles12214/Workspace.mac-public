@@ -179,49 +179,35 @@ public struct WebKitRepresentable: NSViewRepresentable {
         // Match exact native Safari 27.2 User-Agent on macOS
         configuration.applicationNameForUserAgent = "Version/27.2 Safari/605.1.15"
         
-        // Suppress browser upgrade banners & permanently remove Google Workspace companion sidebar
+        // Suppress browser upgrade and promo banners via CSS injection (do NOT run on accounts.google.com)
         let customScript = """
         if (!window.location.hostname.includes('accounts.google.com')) {
             const style = document.createElement('style');
             style.type = 'text/css';
             style.innerHTML = `
                 /* Promo / Download Banners */
-                #push-modal, .gb_Fa, [aria-label*="Try Chrome"], [aria-label*="switch to Chrome"],
+                #push-modal, [aria-label*="Try Chrome"], [aria-label*="switch to Chrome"],
                 [aria-label*="supported browser"], .apps-promo-card, .promo-banner, .app-download-banner,
-                div[role="alert"]:has(a[href*="chrome"]), .butterbar-container:has(a[href*="chrome"]),
-                
-                /* Google Workspace Companion Right Sidebar Permanent HTML Removal */
-                .companion-collapsible-panel,
-                .companion-guest-app-switcher,
-                .companion-collapsed-container,
-                .companion-panel-container,
-                .docs-companion-app-switcher-container,
-                .docs-companion-sidebar-frame,
-                .companion-toggle-button-container,
-                .companion-docked-container,
-                div[aria-label="Side panel"],
-                div[aria-label="Hide side panel"],
-                div[aria-label="Show side panel"],
-                button[aria-label="Side panel"],
-                button[aria-label="Hide side panel"],
-                button[aria-label="Show side panel"],
-                #companion-bar,
-                .app-switcher-button,
-                .brC-brG,
-                .bq9 {
+                div[role="alert"]:has(a[href*="chrome"]), .butterbar-container:has(a[href*="chrome"]) {
                     display: none !important;
                     visibility: hidden !important;
-                    width: 0 !important;
-                    min-width: 0 !important;
-                    max-width: 0 !important;
                     height: 0 !important;
-                    opacity: 0 !important;
-                    pointer-events: none !important;
-                    margin: 0 !important;
-                    padding: 0 !important;
                 }
             `;
             (document.head || document.documentElement).appendChild(style);
+
+            // Cleanly collapse Google Docs right companion side panel using Google's native API/controls
+            function collapseCompanionRail() {
+                const hideBtn = document.querySelector('button[aria-label*="Hide side panel"], div[role="button"][aria-label*="Hide side panel"]');
+                if (hideBtn) {
+                    hideBtn.click();
+                }
+            }
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', () => setTimeout(collapseCompanionRail, 1000));
+            } else {
+                setTimeout(collapseCompanionRail, 1000);
+            }
         }
         """
         let userScript = WKUserScript(source: customScript, injectionTime: .atDocumentEnd, forMainFrameOnly: false)
