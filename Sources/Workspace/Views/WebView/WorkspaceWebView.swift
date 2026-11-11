@@ -222,50 +222,6 @@ public struct WebKitRepresentable: NSViewRepresentable {
                 }
             `;
             (document.head || document.documentElement).appendChild(style);
-
-            // Permanent HTML node deletion & automated resize dispatch
-            function removeGoogleRightSidebar() {
-                const selectors = [
-                    '.companion-collapsible-panel',
-                    '.companion-guest-app-switcher',
-                    '.companion-collapsed-container',
-                    '.companion-panel-container',
-                    '.docs-companion-app-switcher-container',
-                    '.docs-companion-sidebar-frame',
-                    '.companion-toggle-button-container',
-                    '.companion-docked-container',
-                    'div[aria-label="Side panel"]',
-                    'div[aria-label="Hide side panel"]',
-                    'div[aria-label="Show side panel"]',
-                    'button[aria-label="Side panel"]',
-                    'button[aria-label="Hide side panel"]',
-                    'button[aria-label="Show side panel"]',
-                    '#companion-bar',
-                    '.brC-brG',
-                    '.bq9'
-                ];
-                let modified = false;
-                selectors.forEach(sel => {
-                    document.querySelectorAll(sel).forEach(el => {
-                        el.remove();
-                        modified = true;
-                    });
-                });
-                if (modified) {
-                    window.dispatchEvent(new Event('resize'));
-                }
-            }
-
-            if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', removeGoogleRightSidebar);
-            } else {
-                removeGoogleRightSidebar();
-            }
-
-            const sidebarObserver = new MutationObserver(() => {
-                removeGoogleRightSidebar();
-            });
-            sidebarObserver.observe(document.documentElement, { childList: true, subtree: true });
         }
         """
         let userScript = WKUserScript(source: customScript, injectionTime: .atDocumentEnd, forMainFrameOnly: false)
