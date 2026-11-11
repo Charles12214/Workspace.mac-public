@@ -176,6 +176,9 @@ public struct WebKitRepresentable: NSViewRepresentable {
         configuration.websiteDataStore = AppState.shared.activeDataStore
         configuration.preferences.setValue(true, forKey: "developerExtrasEnabled")
         
+        // Match exact native Safari 27.2 User-Agent on macOS for crisp Retina canvas rendering in Google Docs & Sheets
+        configuration.applicationNameForUserAgent = "Version/27.2 Safari/605.1.15"
+        
         // Suppress browser upgrade banners and hide companion sidebar cleanly via CSS (never inject into subframes or accounts.google.com)
         let customScript = """
         if (!window.location.hostname.includes('accounts.google.com')) {
@@ -206,9 +209,8 @@ public struct WebKitRepresentable: NSViewRepresentable {
         wv.navigationDelegate = context.coordinator
         wv.uiDelegate = context.coordinator
         wv.allowsMagnification = true
-        
-        // Genuine macOS desktop Safari 18.3 User-Agent
-        wv.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.3 Safari/605.1.15"
+        wv.pageZoom = 1.0
+        wv.magnification = 1.0
         
         context.coordinator.setupObservers(for: wv)
         

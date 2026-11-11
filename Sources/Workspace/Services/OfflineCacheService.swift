@@ -31,7 +31,7 @@ public final class OfflineCacheService: NSObject, WKNavigationDelegate {
         
         let config = WKWebViewConfiguration()
         config.websiteDataStore = WKWebsiteDataStore.default()
-        config.applicationNameForUserAgent = "Version/18.3 Safari/605.1.15"
+        config.applicationNameForUserAgent = "Version/27.2 Safari/605.1.15"
         
         let urls = coreOfflineEndpoints.compactMap { URL(string: $0) }
         self.pendingUrls = urls
