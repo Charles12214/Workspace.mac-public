@@ -12,7 +12,7 @@ public final class UpdateCheckerService: ObservableObject, @unchecked Sendable {
     public static let shared = UpdateCheckerService()
     
     public var currentVersion: String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.1.0"
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.2.0"
     }
     
     private let releasesApiUrl = URL(string: "https://api.github.com/repos/Charles12214/Workspace.mac-public/releases/latest")!

@@ -24,6 +24,7 @@ public struct WorkspaceWebView: View {
             // MARK: - Edge-to-Edge Embedded WebKit View (No URL bar space, full window)
             WebKitRepresentable(
                 url: app.url,
+                app: app,
                 webViewOut: $webView,
                 canGoBack: $canGoBack,
                 canGoForward: $canGoForward,
@@ -138,12 +139,33 @@ public struct WorkspaceWebView: View {
 // MARK: - NSViewRepresentable for WKWebView
 public struct WebKitRepresentable: NSViewRepresentable {
     public let url: URL
+    public let app: WorkspaceAppItem
     @Binding public var webViewOut: WKWebView?
     @Binding public var canGoBack: Bool
     @Binding public var canGoForward: Bool
     @Binding public var isLoading: Bool
     @Binding public var currentUrlString: String
     @Binding public var pageTitle: String
+    
+    public init(
+        url: URL,
+        app: WorkspaceAppItem,
+        webViewOut: Binding<WKWebView?>,
+        canGoBack: Binding<Bool>,
+        canGoForward: Binding<Bool>,
+        isLoading: Binding<Bool>,
+        currentUrlString: Binding<String>,
+        pageTitle: Binding<String>
+    ) {
+        self.url = url
+        self.app = app
+        self._webViewOut = webViewOut
+        self._canGoBack = canGoBack
+        self._canGoForward = canGoForward
+        self._isLoading = isLoading
+        self._currentUrlString = currentUrlString
+        self._pageTitle = pageTitle
+    }
     
     public func makeCoordinator() -> Coordinator {
         Coordinator(self)
@@ -157,24 +179,96 @@ public struct WebKitRepresentable: NSViewRepresentable {
         // Match exact native Safari 27.2 User-Agent on macOS
         configuration.applicationNameForUserAgent = "Version/27.2 Safari/605.1.15"
         
-        // Suppress browser upgrade and promo banners via CSS injection (do NOT run on accounts.google.com)
-        let cssHideScript = """
+        // Suppress browser upgrade banners & permanently remove Google Workspace companion sidebar
+        let customScript = """
         if (!window.location.hostname.includes('accounts.google.com')) {
             const style = document.createElement('style');
             style.type = 'text/css';
             style.innerHTML = `
+                /* Promo / Download Banners */
                 #push-modal, .gb_Fa, [aria-label*="Try Chrome"], [aria-label*="switch to Chrome"],
                 [aria-label*="supported browser"], .apps-promo-card, .promo-banner, .app-download-banner,
-                div[role="alert"]:has(a[href*="chrome"]), .butterbar-container:has(a[href*="chrome"]) {
+                div[role="alert"]:has(a[href*="chrome"]), .butterbar-container:has(a[href*="chrome"]),
+                
+                /* Google Workspace Companion Right Sidebar Permanent HTML Removal */
+                .companion-collapsible-panel,
+                .companion-guest-app-switcher,
+                .companion-collapsed-container,
+                .companion-panel-container,
+                .docs-companion-app-switcher-container,
+                .docs-companion-sidebar-frame,
+                .companion-toggle-button-container,
+                .companion-docked-container,
+                div[aria-label="Side panel"],
+                div[aria-label="Hide side panel"],
+                div[aria-label="Show side panel"],
+                button[aria-label="Side panel"],
+                button[aria-label="Hide side panel"],
+                button[aria-label="Show side panel"],
+                #companion-bar,
+                .app-switcher-button,
+                .brC-brG,
+                .bq9 {
                     display: none !important;
                     visibility: hidden !important;
+                    width: 0 !important;
+                    min-width: 0 !important;
+                    max-width: 0 !important;
                     height: 0 !important;
+                    opacity: 0 !important;
+                    pointer-events: none !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
                 }
             `;
-            document.documentElement.appendChild(style);
+            (document.head || document.documentElement).appendChild(style);
+
+            // Permanent HTML node deletion & automated resize dispatch
+            function removeGoogleRightSidebar() {
+                const selectors = [
+                    '.companion-collapsible-panel',
+                    '.companion-guest-app-switcher',
+                    '.companion-collapsed-container',
+                    '.companion-panel-container',
+                    '.docs-companion-app-switcher-container',
+                    '.docs-companion-sidebar-frame',
+                    '.companion-toggle-button-container',
+                    '.companion-docked-container',
+                    'div[aria-label="Side panel"]',
+                    'div[aria-label="Hide side panel"]',
+                    'div[aria-label="Show side panel"]',
+                    'button[aria-label="Side panel"]',
+                    'button[aria-label="Hide side panel"]',
+                    'button[aria-label="Show side panel"]',
+                    '#companion-bar',
+                    '.brC-brG',
+                    '.bq9'
+                ];
+                let modified = false;
+                selectors.forEach(sel => {
+                    document.querySelectorAll(sel).forEach(el => {
+                        el.remove();
+                        modified = true;
+                    });
+                });
+                if (modified) {
+                    window.dispatchEvent(new Event('resize'));
+                }
+            }
+
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', removeGoogleRightSidebar);
+            } else {
+                removeGoogleRightSidebar();
+            }
+
+            const sidebarObserver = new MutationObserver(() => {
+                removeGoogleRightSidebar();
+            });
+            sidebarObserver.observe(document.documentElement, { childList: true, subtree: true });
         }
         """
-        let userScript = WKUserScript(source: cssHideScript, injectionTime: .atDocumentEnd, forMainFrameOnly: false)
+        let userScript = WKUserScript(source: customScript, injectionTime: .atDocumentEnd, forMainFrameOnly: false)
         configuration.userContentController.addUserScript(userScript)
         
         // Initialize with real screen frame so WebKit and Google Docs initialize at full Retina resolution
@@ -229,13 +323,33 @@ public struct WebKitRepresentable: NSViewRepresentable {
             
             observers.append(webView.observe(\.title, options: [.new]) { [weak self] wv, _ in
                 DispatchQueue.main.async {
-                    self?.parent.pageTitle = wv.title ?? ""
+                    guard let self = self else { return }
+                    let title = wv.title ?? ""
+                    self.parent.pageTitle = title
+                    if let urlStr = wv.url?.absoluteString, !urlStr.isEmpty {
+                        AppState.shared.recordRecentDocument(
+                            appId: self.parent.app.id,
+                            appName: self.parent.app.name,
+                            title: title,
+                            urlString: urlStr
+                        )
+                    }
                 }
             })
             
             observers.append(webView.observe(\.url, options: [.new]) { [weak self] wv, _ in
                 DispatchQueue.main.async {
-                    self?.parent.currentUrlString = wv.url?.absoluteString ?? ""
+                    guard let self = self else { return }
+                    let urlStr = wv.url?.absoluteString ?? ""
+                    self.parent.currentUrlString = urlStr
+                    if let title = wv.title, !title.isEmpty, !urlStr.isEmpty {
+                        AppState.shared.recordRecentDocument(
+                            appId: self.parent.app.id,
+                            appName: self.parent.app.name,
+                            title: title,
+                            urlString: urlStr
+                        )
+                    }
                 }
             })
         }

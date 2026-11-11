@@ -340,6 +340,57 @@ public struct SettingsView: View {
                     .padding(16)
                     .liquidGlass(cornerRadius: 14)
                     
+                    // Offline Workspace & Pre-downloaded Apps
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Text("OFFLINE WORKSPACE")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(.secondary)
+                            
+                            Spacer()
+                            
+                            HStack(spacing: 5) {
+                                Circle()
+                                    .fill(OfflineCacheService.shared.isPrewarming ? Color.orange : Color(hex: "0F9D58"))
+                                    .frame(width: 7, height: 7)
+                                Text(OfflineCacheService.shared.isPrewarming ? "Syncing Cache..." : "Pre-downloaded & Offline Ready")
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .foregroundStyle(OfflineCacheService.shared.isPrewarming ? Color.orange : Color(hex: "0F9D58"))
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(
+                                Capsule()
+                                    .fill((OfflineCacheService.shared.isPrewarming ? Color.orange : Color(hex: "0F9D58")).opacity(0.1))
+                            )
+                        }
+                        
+                        Text("Core Google Workspace web applications (Docs, Sheets, Slides, Drive, Keep, Calendar, and NotebookLM) are pre-warmed and stored in WebKit's persistent offline storage for fast loading and offline editing.")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                            .lineSpacing(2)
+                        
+                        Button(action: {
+                            OfflineCacheService.shared.prewarmOfflineCache()
+                        }) {
+                            HStack(spacing: 6) {
+                                Image(systemName: OfflineCacheService.shared.isPrewarming ? "arrow.triangle.2.circlepath" : "arrow.clockwise")
+                                    .rotationEffect(.degrees(OfflineCacheService.shared.isPrewarming ? 360 : 0))
+                                Text(OfflineCacheService.shared.isPrewarming ? "Updating Cache..." : "Refresh Pre-downloaded Apps")
+                            }
+                            .font(.system(size: 11.5, weight: .medium))
+                            .foregroundStyle(Color(hex: "1A73E8"))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 5)
+                            .background(Color(hex: "1A73E8").opacity(0.08))
+                            .clipShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(OfflineCacheService.shared.isPrewarming)
+                    }
+                    .padding(16)
+                    .liquidGlass(cornerRadius: 14)
+                    
                     // App Updates Section
                     VStack(alignment: .leading, spacing: 10) {
                         Text("APP UPDATES")

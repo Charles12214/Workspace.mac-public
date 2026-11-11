@@ -52,6 +52,7 @@ public struct HomeView: View {
     @ObservedObject var greetingManager: GreetingManager
     @Environment(\.colorScheme) private var colorScheme
     @State private var isPinDropTargeted: Bool = false
+    @State private var isHoveringContinueCard: Bool = false
     
     private let geminiGradient = LinearGradient(
         colors: [
@@ -117,6 +118,85 @@ public struct HomeView: View {
                         .font(.system(size: 13))
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
+                }
+                
+                // MARK: - "Continue where you left off" Hero Section
+                if let doc = state.lastOpenedDocument {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "clock.arrow.circlepath")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(Color(hex: "1A73E8"))
+                            
+                            Text("CONTINUE WHERE YOU LEFT OFF")
+                                .font(.system(size: 11, weight: .bold, design: .rounded))
+                                .foregroundStyle(.secondary)
+                                .tracking(0.8)
+                            
+                            Spacer()
+                        }
+                        
+                        Button(action: {
+                            state.resumeLastDocument()
+                        }) {
+                            HStack(spacing: 16) {
+                                // App Icon
+                                GoogleAppIconView(appId: doc.appId, size: 38)
+                                    .shadow(color: Color.black.opacity(0.12), radius: 4, x: 0, y: 2)
+                                
+                                // Titles (Large App Title, Small Document Subtitle)
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(doc.appName)
+                                        .font(.system(size: 16, weight: .bold, design: .rounded))
+                                        .foregroundStyle(.primary)
+                                    
+                                    Text(doc.documentTitle)
+                                        .font(.system(size: 12.5, weight: .medium))
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                }
+                                
+                                Spacer()
+                                
+                                // Pill Resume Action Button
+                                HStack(spacing: 6) {
+                                    Text("Resume")
+                                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                                    Image(systemName: "arrow.right")
+                                        .font(.system(size: 10, weight: .bold))
+                                }
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 7)
+                                .background(
+                                    Capsule()
+                                        .fill(Color(hex: "1A73E8"))
+                                )
+                                .foregroundStyle(Color.white)
+                                .shadow(color: Color(hex: "1A73E8").opacity(0.35), radius: isHoveringContinueCard ? 8 : 4, x: 0, y: 2)
+                            }
+                            .padding(.horizontal, 18)
+                            .padding(.vertical, 14)
+                            .background(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .fill(isHoveringContinueCard ? Color.primary.opacity(0.06) : Color.primary.opacity(0.03))
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .stroke(
+                                        isHoveringContinueCard ? Color(hex: "1A73E8").opacity(0.5) : Color.primary.opacity(0.08),
+                                        lineWidth: isHoveringContinueCard ? 1.5 : 1
+                                    )
+                            )
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .onHover { hovering in
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                isHoveringContinueCard = hovering
+                            }
+                        }
+                    }
+                    .transition(.opacity.combined(with: .move(edge: .top)))
                 }
                 
                 // MARK: - Recently Used Section (Collapsible!)

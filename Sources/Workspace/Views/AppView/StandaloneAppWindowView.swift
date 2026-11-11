@@ -7,6 +7,7 @@ import AppKit
 public struct StandaloneAppWindowView: View {
     public let app: WorkspaceAppItem
     public let userEmail: String
+    public let customUrl: URL?
     
     @State private var webView: WKWebView? = nil
     @State private var canGoBack: Bool = false
@@ -16,9 +17,10 @@ public struct StandaloneAppWindowView: View {
     @State private var pageTitle: String = ""
     @State private var currentZoom: CGFloat = 1.0
     
-    public init(app: WorkspaceAppItem, userEmail: String = "") {
+    public init(app: WorkspaceAppItem, userEmail: String = "", customUrl: URL? = nil) {
         self.app = app
         self.userEmail = userEmail
+        self.customUrl = customUrl
     }
     
     public var body: some View {
@@ -128,7 +130,8 @@ public struct StandaloneAppWindowView: View {
             // MARK: - Embedded Web View
             ZStack(alignment: .top) {
                 WebKitRepresentable(
-                    url: app.resolvedUrl(for: userEmail),
+                    url: customUrl ?? app.resolvedUrl(for: userEmail),
+                    app: app,
                     webViewOut: $webView,
                     canGoBack: $canGoBack,
                     canGoForward: $canGoForward,

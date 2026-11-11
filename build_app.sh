@@ -56,9 +56,9 @@ cat <<EOF > "${CONTENTS_DIR}/Info.plist"
     <key>CFBundleIdentifier</key>
     <string>com.workspacemac.app</string>
     <key>CFBundleVersion</key>
-    <string>1.1.0</string>
+    <string>1.2.0</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.1.0</string>
+    <string>1.2.0</string>
     <key>CFBundleExecutable</key>
     <string>Workspace.mac</string>
     <key>CFBundleIconFile</key>

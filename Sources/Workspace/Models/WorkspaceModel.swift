@@ -159,6 +159,30 @@ public enum AppViewMode: String, CaseIterable, Codable, Identifiable, Sendable {
     }
 }
 
+// MARK: - Recent Document Item ("Continue where you left off")
+public struct RecentDocumentItem: Codable, Equatable, Sendable, Identifiable {
+    public var id: String { documentUrl }
+    public var appId: String             // e.g. "docs"
+    public var appName: String           // e.g. "Google Docs"
+    public var documentTitle: String     // e.g. "Music Tech Book Y12"
+    public var documentUrl: String       // e.g. "https://docs.google.com/document/d/.../edit"
+    public var lastOpened: Date
+    
+    public init(
+        appId: String,
+        appName: String,
+        documentTitle: String,
+        documentUrl: String,
+        lastOpened: Date = Date()
+    ) {
+        self.appId = appId
+        self.appName = appName
+        self.documentTitle = documentTitle
+        self.documentUrl = documentUrl
+        self.lastOpened = lastOpened
+    }
+}
+
 // MARK: - User Profile
 public struct UserProfile: Codable, Equatable, Sendable, Identifiable {
     public var id: String {

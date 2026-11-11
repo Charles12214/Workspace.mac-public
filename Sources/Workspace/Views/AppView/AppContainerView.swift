@@ -113,7 +113,8 @@ public struct WorkspaceAppContainer: View {
                         // Embedded WebKit View
                         ZStack(alignment: .top) {
                             WebKitRepresentable(
-                                url: app.resolvedUrl(for: state.userProfile.email),
+                                url: state.overrideUrlForApp[app.id] ?? app.resolvedUrl(for: state.userProfile.email),
+                                app: app,
                                 webViewOut: $webView,
                                 canGoBack: $canGoBack,
                                 canGoForward: $canGoForward,

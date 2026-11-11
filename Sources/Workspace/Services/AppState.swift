@@ -15,11 +15,18 @@ public final class AppState: ObservableObject {
     private let kHasCompletedSetupKey = "Workspace_HasCompletedSetup"
     private let kHideTileTitlesKey = "Workspace_HideTileTitles"
     private let kIsSidebarCollapsedKey = "Workspace_IsSidebarCollapsed"
+    private let kLastOpenedDocumentKey = "Workspace_LastOpenedDocument"
     
     // MARK: - Published State
     @Published public var apps: [WorkspaceAppItem] = []
     @Published public var selectedAppId: String? = nil // nil means Home is selected
     @Published public var searchQuery: String = ""
+    
+    // Continue where you left off
+    @Published public var lastOpenedDocument: RecentDocumentItem? {
+        didSet { saveLastOpenedDocument() }
+    }
+    @Published public var overrideUrlForApp: [String: URL] = [:]
     
     // Exactly ONE account per login for the app
     @Published public var userProfile: UserProfile {
@@ -158,6 +165,20 @@ public final class AppState: ObservableObject {
         // Load Pinned and Recent
         loadPersistedAppData()
         
+        // Load Last Opened Document ("Continue where you left off")
+        if let data = UserDefaults.standard.data(forKey: kLastOpenedDocumentKey),
+           let doc = try? JSONDecoder().decode(RecentDocumentItem.self, from: data) {
+            self.lastOpenedDocument = doc
+        } else {
+            // Seed initial sample document
+            self.lastOpenedDocument = RecentDocumentItem(
+                appId: "docs",
+                appName: "Google Docs",
+                documentTitle: "Music Tech Book Y12",
+                documentUrl: "https://docs.google.com/document/u/0/"
+            )
+        }
+        
         // Listen for macOS system theme changes (Dark/Light mode switch)
         DistributedNotificationCenter.default().addObserver(
             forName: NSNotification.Name("AppleInterfaceThemeChangedNotification"),
@@ -183,6 +204,11 @@ public final class AppState: ObservableObject {
         // Asynchronously check for releases on GitHub after a brief launch delay
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in
             self?.checkForUpdates()
+        }
+        
+        // Pre-warm offline workspace application cache in background
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.5) {
+            OfflineCacheService.shared.prewarmOfflineCache()
         }
     }
     
@@ -482,8 +508,78 @@ public final class AppState: ObservableObject {
         }
     }
     
-    public func openSeparateWindow(for app: WorkspaceAppItem) {
-        StandaloneWindowManager.shared.openWindow(for: app, userEmail: userProfile.email)
+    public func openSeparateWindow(for app: WorkspaceAppItem, customUrl: URL? = nil) {
+        StandaloneWindowManager.shared.openWindow(for: app, userEmail: userProfile.email, customUrl: customUrl)
+    }
+    
+    // MARK: - Continue Where You Left Off Action
+    public func resumeLastDocument() {
+        guard let doc = lastOpenedDocument,
+              let app = apps.first(where: { $0.id == doc.appId }) ?? apps.first(where: { $0.id == "docs" }) else {
+            return
+        }
+        
+        let targetUrl = URL(string: doc.documentUrl) ?? app.resolvedUrl(for: userProfile.email)
+        
+        if appViewMode == .separated {
+            openSeparateWindow(for: app, customUrl: targetUrl)
+            return
+        }
+        
+        overrideUrlForApp[app.id] = targetUrl
+        launchApp(app)
+    }
+    
+    public func recordRecentDocument(appId: String, appName: String, title: String, urlString: String) {
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedTitle.isEmpty,
+              !urlString.isEmpty,
+              !urlString.contains("accounts.google.com") else { return }
+        
+        // Clean off browser suffixes like " - Google Docs"
+        let cleanTitle = cleanDocumentTitle(trimmedTitle, appName: appName)
+        let item = RecentDocumentItem(
+            appId: appId,
+            appName: appName,
+            documentTitle: cleanTitle,
+            documentUrl: urlString,
+            lastOpened: Date()
+        )
+        self.lastOpenedDocument = item
+    }
+    
+    private func cleanDocumentTitle(_ raw: String, appName: String) -> String {
+        var t = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        let suffixes = [
+            " - Google Docs",
+            " - Google Sheets",
+            " - Google Slides",
+            " - Google Drive",
+            " - Google Calendar",
+            " - Google Keep",
+            " - Google Mail",
+            " - Gmail",
+            " - Google Meet",
+            " - Google Chat",
+            " - NotebookLM",
+            " - Google"
+        ]
+        for s in suffixes {
+            if t.hasSuffix(s) {
+                t = String(t.dropLast(s.count)).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        }
+        if t.hasPrefix("(NEW) ") {
+            t = String(t.dropFirst(6)).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        if t.hasPrefix("* ") {
+            t = String(t.dropFirst(2)).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        // If empty or matches appName exactly, return fallback
+        if t.isEmpty || t.caseInsensitiveCompare(appName) == .orderedSame {
+            return "Active Document"
+        }
+        return t
     }
     
     public func goHome() {
@@ -569,6 +665,12 @@ public final class AppState: ObservableObject {
     public func saveUserProfile() {
         if let data = try? JSONEncoder().encode(userProfile) {
             UserDefaults.standard.set(data, forKey: kUserProfileKey)
+        }
+    }
+    
+    private func saveLastOpenedDocument() {
+        if let doc = lastOpenedDocument, let data = try? JSONEncoder().encode(doc) {
+            UserDefaults.standard.set(data, forKey: kLastOpenedDocumentKey)
         }
     }
     

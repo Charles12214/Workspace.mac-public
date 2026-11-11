@@ -7,10 +7,10 @@ public final class StandaloneWindowManager: NSObject, ObservableObject {
     
     private var windowControllers: [String: NSWindowController] = [:]
     
-    public func openWindow(for app: WorkspaceAppItem, userEmail: String = "") {
+    public func openWindow(for app: WorkspaceAppItem, userEmail: String = "", customUrl: URL? = nil) {
         let windowId = "standalone_\(app.id)_\(UUID().uuidString)"
         
-        let standaloneView = StandaloneAppWindowView(app: app, userEmail: userEmail)
+        let standaloneView = StandaloneAppWindowView(app: app, userEmail: userEmail, customUrl: customUrl)
         let hostingController = NSHostingController(rootView: standaloneView)
         
         let window = NSWindow(contentViewController: hostingController)
