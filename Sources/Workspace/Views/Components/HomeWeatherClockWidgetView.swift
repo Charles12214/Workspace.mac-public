@@ -198,35 +198,50 @@ public struct HomeWeatherClockWidgetView: View {
                 .background(RoundedRectangle(cornerRadius: 10).fill(Color.primary.opacity(0.04)))
                 
                 if !weather.hourly.isEmpty {
-                    VStack(alignment: .leading, spacing: 6) {
+                    VStack(alignment: .leading, spacing: 8) {
                         Text("UPCOMING HOURS")
                             .font(.system(size: 9.5, weight: .bold))
                             .foregroundStyle(.secondary)
                         
-                        HStack(spacing: 6) {
-                            ForEach(weather.hourly) { hour in
-                                VStack(spacing: 4) {
-                                    Text(hour.timeString)
-                                        .font(.system(size: 10))
-                                        .foregroundStyle(.secondary)
-                                    Image(systemName: hour.symbolName)
-                                        .font(.system(size: 12))
-                                        .foregroundStyle(weatherSymbolColor(hour.symbolName))
-                                        .frame(height: 14)
-                                    Text("\(hour.temperature)°")
-                                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                ForEach(weather.hourly) { hour in
+                                    VStack(spacing: 5) {
+                                        Text(hour.timeString)
+                                            .font(.system(size: 10, weight: .medium))
+                                            .foregroundStyle(.secondary)
+                                        Image(systemName: hour.symbolName)
+                                            .font(.system(size: 14))
+                                            .foregroundStyle(weatherSymbolColor(hour.symbolName))
+                                            .frame(height: 16)
+                                        Text("\(hour.temperature)°")
+                                            .font(.system(size: 11, weight: .bold, design: .rounded))
+                                        
+                                        if hour.precipProbability > 10 {
+                                            Text("\(hour.precipProbability)%")
+                                                .font(.system(size: 8.5, weight: .bold, design: .monospaced))
+                                                .foregroundStyle(Color(hex: "1A73E8"))
+                                        } else {
+                                            Text(" ")
+                                                .font(.system(size: 8.5))
+                                        }
+                                    }
+                                    .frame(width: 48)
+                                    .padding(.vertical, 8)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                            .fill(Color.primary.opacity(0.04))
+                                    )
                                 }
-                                .frame(width: 44)
-                                .padding(.vertical, 6)
-                                .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.03)))
                             }
+                            .padding(.horizontal, 2)
                         }
                     }
                 }
             }
         }
         .padding(16)
-        .frame(width: 320)
+        .frame(width: 380)
     }
     
     private func weatherSymbolColor(_ name: String) -> Color {

@@ -269,7 +269,7 @@ public final class WeatherService: NSObject, ObservableObject, CLLocationManager
         }
         
         let unitParam = temperatureUnit == .fahrenheit ? "fahrenheit" : "celsius"
-        let urlString = "https://api.open-meteo.com/v1/forecast?latitude=\(lat)&longitude=\(lon)&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,weather_code&hourly=temperature_2m,precipitation_probability,weather_code&temperature_unit=\(unitParam)&forecast_days=1"
+        let urlString = "https://api.open-meteo.com/v1/forecast?latitude=\(lat)&longitude=\(lon)&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,weather_code&hourly=temperature_2m,precipitation_probability,weather_code,is_day&temperature_unit=\(unitParam)&forecast_days=2"
         
         guard let url = URL(string: urlString) else { return }
         
@@ -300,7 +300,7 @@ public final class WeatherService: NSObject, ObservableObject, CLLocationManager
                 
                 let (condition, symbol) = Self.mapWMOWeatherCode(code, isDay: isDay)
                 
-                // Parse hourly forecast (next 6 hours)
+                // Parse hourly forecast (next 12 future hours across midnight)
                 var hourlyItems: [HourlyForecastItem] = []
                 if let hourly = json["hourly"] as? [String: Any],
                    let times = hourly["time"] as? [String],
@@ -308,6 +308,7 @@ public final class WeatherService: NSObject, ObservableObject, CLLocationManager
                    let codes = hourly["weather_code"] as? [Int],
                    let probs = hourly["precipitation_probability"] as? [Int] {
                     
+                    let isDays = hourly["is_day"] as? [Int]
                     let nowIsoHour = ISO8601DateFormatter().string(from: Date()).prefix(13)
                     var startIndex = 0
                     for (idx, timeStr) in times.enumerated() {
@@ -317,17 +318,21 @@ public final class WeatherService: NSObject, ObservableObject, CLLocationManager
                         }
                     }
                     
-                    let count = min(times.count, startIndex + 6)
+                    // Show next 12 hours
+                    let count = min(times.count, startIndex + 12)
                     for i in startIndex..<count {
                         let tStr = times[i]
                         let tTemp = Int(round(temps[i]))
                         let tCode = codes[i]
                         let tProb = i < probs.count ? probs[i] : 0
-                        let (_, tSym) = Self.mapWMOWeatherCode(tCode, isDay: true)
+                        let tIsDay = (isDays != nil && i < isDays!.count) ? (isDays![i] == 1) : (i % 24 >= 6 && i % 24 <= 20)
+                        let (_, tSym) = Self.mapWMOWeatherCode(tCode, isDay: tIsDay)
                         
-                        // Format hour string (e.g. "17:00" or "5 PM")
+                        // Format hour string (e.g. "Now", "00:00", "01:00" or "11pm", "12am")
                         let hourDisplay: String
-                        if let date = Self.isoDate(from: tStr) {
+                        if i == startIndex {
+                            hourDisplay = "Now"
+                        } else if let date = Self.isoDate(from: tStr) {
                             let form = DateFormatter()
                             form.dateFormat = self.is24HourTime ? "HH:mm" : "ha"
                             hourDisplay = form.string(from: date).lowercased()
