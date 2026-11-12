@@ -17,10 +17,6 @@ public struct OnboardingView: View {
     // Step 6 Pin search query
     @State private var pinSearchQuery: String = ""
     
-    // Final Step soft text animation
-    @State private var animateFinalText: Bool = false
-    @State private var geminiGlowPulse: Bool = false
-    
     private let geminiGradient = GeminiPalette.linearGradient
     
     public init(state: AppState) {
@@ -63,11 +59,6 @@ public struct OnboardingView: View {
             }
         }
         .frame(minWidth: 780, minHeight: 620)
-        .onAppear {
-            withAnimation(.easeInOut(duration: 2.5).repeatForever(autoreverses: true)) {
-                geminiGlowPulse = true
-            }
-        }
     }
     
     // MARK: - Ambient Background
@@ -93,6 +84,7 @@ public struct OnboardingView: View {
                 .blur(radius: 90)
                 .offset(x: 150, y: 220)
         }
+        .drawingGroup()
     }
     
     // MARK: - Top Step Bar (8 steps)
@@ -140,33 +132,9 @@ public struct OnboardingView: View {
     // MARK: - Step 1: Welcome Screen
     private var step1WelcomeView: some View {
         VStack(spacing: 20) {
-            // Workspace App Icon Emblem
-            ZStack {
-                Circle()
-                    .fill(Color.accentColor.opacity(0.18))
-                    .frame(width: 96, height: 96)
-                    .blur(radius: 16)
-                    .scaleEffect(geminiGlowPulse ? 1.10 : 0.95)
-                
-                if let logoImg = AppIconAssetLoader.shared.image(for: "workspace") ?? AppIconAssetLoader.shared.image(for: "workspace_icon") {
-                    Image(nsImage: logoImg)
-                        .resizable()
-                        .interpolation(.high)
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 82, height: 82)
-                        .shadow(color: Color.black.opacity(0.25), radius: 14, y: 5)
-                } else {
-                    RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .fill(.ultraThinMaterial)
-                        .frame(width: 80, height: 80)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                                .stroke(Color.accentColor, lineWidth: 2)
-                        )
-                        .shadow(color: Color.black.opacity(0.2), radius: 14)
-                }
-            }
-            .padding(.bottom, 8)
+            // Workspace App Icon Emblem (Isolated Animation)
+            WelcomePulsingEmblem()
+                .padding(.bottom, 8)
             
             VStack(spacing: 8) {
                 Text("Hey! Welcome to Workspace.mac.")
@@ -954,33 +922,8 @@ public struct OnboardingView: View {
     // MARK: - Step 8: Final Setup Screen
     private var step8FinalView: some View {
         VStack(spacing: 28) {
-            // Animated Soft Pulsing Workspace App Icon
-            ZStack {
-                Circle()
-                    .fill(Color.accentColor.opacity(0.22))
-                    .frame(width: 130, height: 130)
-                    .blur(radius: 28)
-                    .scaleEffect(animateFinalText ? 1.15 : 0.90)
-                
-                if let logoImg = AppIconAssetLoader.shared.image(for: "workspace") ?? AppIconAssetLoader.shared.image(for: "workspace_icon") {
-                    Image(nsImage: logoImg)
-                        .resizable()
-                        .interpolation(.high)
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 96, height: 96)
-                        .shadow(color: Color.black.opacity(0.3), radius: 18, y: 6)
-                        .scaleEffect(animateFinalText ? 1.05 : 0.97)
-                } else {
-                    RoundedRectangle(cornerRadius: 30, style: .continuous)
-                        .fill(.ultraThinMaterial)
-                        .frame(width: 100, height: 100)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 30, style: .continuous)
-                                .stroke(Color.accentColor, lineWidth: 2.5)
-                        )
-                        .shadow(color: Color.black.opacity(0.3), radius: 20)
-                }
-            }
+            // Animated Soft Pulsing Workspace App Icon (Isolated Animation)
+            FinalePulsingEmblem()
             
             // Sentence-level smooth gradient animation with blur decay
             VStack(spacing: 12) {
@@ -1032,11 +975,6 @@ public struct OnboardingView: View {
         }
         .padding(36)
         .liquidGlass(cornerRadius: 28, isHighlighted: true)
-        .onAppear {
-            withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
-                animateFinalText = true
-            }
-        }
     }
     
     // MARK: - Bottom Action Bar (Bidirectional Carousel Direction)
@@ -1087,6 +1025,82 @@ public struct OnboardingView: View {
                     .shadow(color: Color(hex: "1A73E8").opacity(0.3), radius: 6, y: 2)
                 }
                 .buttonStyle(.plain)
+            }
+        }
+    }
+}
+
+// MARK: - Isolated Emblem Leaf Views (Zero Parent Invalidation)
+private struct WelcomePulsingEmblem: View {
+    @State private var isPulsing: Bool = false
+    
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(Color.accentColor.opacity(0.18))
+                .frame(width: 96, height: 96)
+                .blur(radius: 16)
+                .scaleEffect(isPulsing ? 1.10 : 0.95)
+            
+            if let logoImg = AppIconAssetLoader.shared.image(for: "workspace") ?? AppIconAssetLoader.shared.image(for: "workspace_icon") {
+                Image(nsImage: logoImg)
+                    .resizable()
+                    .interpolation(.high)
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 82, height: 82)
+                    .shadow(color: Color.black.opacity(0.25), radius: 14, y: 5)
+            } else {
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .fill(.ultraThinMaterial)
+                    .frame(width: 80, height: 80)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 22, style: .continuous)
+                            .stroke(Color.accentColor, lineWidth: 2)
+                    )
+                    .shadow(color: Color.black.opacity(0.2), radius: 14)
+            }
+        }
+        .onAppear {
+            withAnimation(.easeInOut(duration: 2.5).repeatForever(autoreverses: true)) {
+                isPulsing = true
+            }
+        }
+    }
+}
+
+private struct FinalePulsingEmblem: View {
+    @State private var isPulsing: Bool = false
+    
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(Color.accentColor.opacity(0.22))
+                .frame(width: 130, height: 130)
+                .blur(radius: 28)
+                .scaleEffect(isPulsing ? 1.15 : 0.90)
+            
+            if let logoImg = AppIconAssetLoader.shared.image(for: "workspace") ?? AppIconAssetLoader.shared.image(for: "workspace_icon") {
+                Image(nsImage: logoImg)
+                    .resizable()
+                    .interpolation(.high)
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 96, height: 96)
+                    .shadow(color: Color.black.opacity(0.3), radius: 18, y: 6)
+                    .scaleEffect(isPulsing ? 1.05 : 0.97)
+            } else {
+                RoundedRectangle(cornerRadius: 30, style: .continuous)
+                    .fill(.ultraThinMaterial)
+                    .frame(width: 100, height: 100)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 30, style: .continuous)
+                            .stroke(Color.accentColor, lineWidth: 2.5)
+                    )
+                    .shadow(color: Color.black.opacity(0.3), radius: 20)
+            }
+        }
+        .onAppear {
+            withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
+                isPulsing = true
             }
         }
     }

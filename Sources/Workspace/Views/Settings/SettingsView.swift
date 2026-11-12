@@ -6,7 +6,6 @@ public struct SettingsView: View {
     @ObservedObject private var weatherService = WeatherService.shared
     @Environment(\.dismiss) private var dismiss
     
-    @State private var pulseAtAGlance: Bool = false
     @State private var showingClearCookiesAlert: Bool = false
     @State private var cookiesClearedMessage: Bool = false
     @State private var newAccountLabel: String = "Work"
@@ -95,25 +94,9 @@ public struct SettingsView: View {
                         
                         Divider().opacity(0.3)
                         
-                        // "At a glance" Easter Egg Toggle Card with Repeating Pulse Animation
+                        // "At a glance" Easter Egg Toggle Card with Isolated Pulse Animation
                         HStack(spacing: 12) {
-                            ZStack {
-                                Circle()
-                                    .fill(
-                                        LinearGradient(
-                                            colors: [Color(hex: "00A4F9"), Color(hex: "8B5CF6"), Color(hex: "F7646F")],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        )
-                                    )
-                                    .frame(width: 32, height: 32)
-                                    .scaleEffect(pulseAtAGlance ? 1.15 : 0.95)
-                                    .blur(radius: pulseAtAGlance ? 4 : 2)
-                                
-                                Image(systemName: "sparkles")
-                                    .font(.system(size: 14, weight: .bold))
-                                    .foregroundStyle(.white)
-                            }
+                            PulsingGlanceEmblem()
                             
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("At a glance")
@@ -147,8 +130,8 @@ public struct SettingsView: View {
                                 .stroke(
                                     LinearGradient(
                                         colors: [
-                                            Color(hex: "00A4F9").opacity(pulseAtAGlance ? 0.7 : 0.2),
-                                            Color(hex: "8B5CF6").opacity(pulseAtAGlance ? 0.7 : 0.2)
+                                            Color(hex: "00A4F9").opacity(0.4),
+                                            Color(hex: "8B5CF6").opacity(0.4)
                                         ],
                                         startPoint: .topLeading,
                                         endPoint: .bottomTrailing
@@ -159,11 +142,6 @@ public struct SettingsView: View {
                     }
                     .padding(16)
                     .liquidGlass(cornerRadius: 14)
-                    .onAppear {
-                        withAnimation(.easeInOut(duration: 2.2).repeatForever(autoreverses: true)) {
-                            pulseAtAGlance = true
-                        }
-                    }
                     
                     // MARK: - Live Weather & Local Time Widget Section
                     VStack(alignment: .leading, spacing: 14) {
@@ -827,5 +805,35 @@ public struct SettingsView: View {
             )
         }
         .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Isolated Leaf View for Repeating Animation (Zero Root Invalidation)
+private struct PulsingGlanceEmblem: View {
+    @State private var isPulsing: Bool = false
+    
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(
+                    LinearGradient(
+                        colors: [Color(hex: "00A4F9"), Color(hex: "8B5CF6"), Color(hex: "F7646F")],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .frame(width: 32, height: 32)
+                .scaleEffect(isPulsing ? 1.15 : 0.95)
+                .blur(radius: isPulsing ? 4 : 2)
+            
+            Image(systemName: "sparkles")
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(.white)
+        }
+        .onAppear {
+            withAnimation(.easeInOut(duration: 2.2).repeatForever(autoreverses: true)) {
+                isPulsing = true
+            }
+        }
     }
 }

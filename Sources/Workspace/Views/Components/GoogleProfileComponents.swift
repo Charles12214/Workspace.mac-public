@@ -29,6 +29,24 @@ public struct GoogleAiDesign {
     )
 }
 
+// MARK: - In-Memory Decoded Avatar Image Cache
+@MainActor
+public final class AvatarImageCache {
+    private static let cache = NSCache<NSData, NSImage>()
+    
+    public static func image(for data: Data) -> NSImage? {
+        let nsData = data as NSData
+        if let cached = cache.object(forKey: nsData) {
+            return cached
+        }
+        if let img = NSImage(data: data) {
+            cache.setObject(img, forKey: nsData)
+            return img
+        }
+        return nil
+    }
+}
+
 // MARK: - Profile Avatar with Purple/Blue Gradient Ring & Edit Pencil Button
 public struct GoogleProfileAvatarView: View {
     public let avatarData: Data?
@@ -61,10 +79,7 @@ public struct GoogleProfileAvatarView: View {
                 // Inner profile image, initial, or standard PFP icon
                 Group {
                     if let data = avatarData,
-                       let nsImg = NSImage(data: data) {
-                        let _ = {
-                            nsImg.size = NSSize(width: size, height: size)
-                        }()
+                       let nsImg = AvatarImageCache.image(for: data) {
                         Image(nsImage: nsImg)
                             .resizable()
                             .aspectRatio(contentMode: .fill)

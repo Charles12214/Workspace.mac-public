@@ -174,9 +174,30 @@ public final class WeatherService: NSObject, ObservableObject, CLLocationManager
     }
     
     // MARK: - Clock Management
+    private static let timeFormatter24: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale.current
+        f.dateFormat = "HH:mm"
+        return f
+    }()
+    
+    private static let timeFormatter12: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale.current
+        f.dateFormat = "h:mm a"
+        return f
+    }()
+    
+    private static let dateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale.current
+        f.dateFormat = "EEE, d MMM"
+        return f
+    }()
+    
     private func setupClock() {
         updateClock()
-        // Update clock every second
+        // Update clock every second, but ONLY publish changes when minute or date actually changes
         clockTimer = Timer.publish(every: 1.0, on: .main, in: .common)
             .autoconnect()
             .sink { [weak self] _ in
@@ -186,20 +207,16 @@ public final class WeatherService: NSObject, ObservableObject, CLLocationManager
     
     private func updateClock() {
         let now = Date()
-        let formatter = DateFormatter()
-        formatter.locale = Locale.current
-        
-        if is24HourTime {
-            formatter.dateFormat = "HH:mm"
-        } else {
-            formatter.dateFormat = "h:mm a"
+        let timeFormatter = is24HourTime ? Self.timeFormatter24 : Self.timeFormatter12
+        let newTime = timeFormatter.string(from: now)
+        if self.currentTimeString != newTime {
+            self.currentTimeString = newTime
         }
-        self.currentTimeString = formatter.string(from: now)
         
-        let dateForm = DateFormatter()
-        dateForm.locale = Locale.current
-        dateForm.dateFormat = "EEE, d MMM"
-        self.currentDateString = dateForm.string(from: now)
+        let newDate = Self.dateFormatter.string(from: now)
+        if self.currentDateString != newDate {
+            self.currentDateString = newDate
+        }
     }
     
     // MARK: - Location & Reverse Geocoding
