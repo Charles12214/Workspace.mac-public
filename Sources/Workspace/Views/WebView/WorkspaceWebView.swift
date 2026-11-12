@@ -227,7 +227,7 @@ public struct WebKitRepresentable: NSViewRepresentable {
     
     public func updateNSView(_ nsView: WKWebView, context: Context) {}
     
-    public class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
+    public class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate {
         var parent: WebKitRepresentable
         private var observers: [NSKeyValueObservation] = []
         
@@ -288,14 +288,77 @@ public struct WebKitRepresentable: NSViewRepresentable {
         }
         
         @MainActor
-        public func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping @MainActor (WKNavigationActionPolicy) -> Void) {
-            decisionHandler(.allow)
+        public func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, preferences: WKWebpagePreferences, decisionHandler: @escaping @MainActor (WKNavigationActionPolicy, WKWebpagePreferences) -> Void) {
+            if navigationAction.shouldPerformDownload {
+                decisionHandler(.download, preferences)
+            } else {
+                decisionHandler(.allow, preferences)
+            }
+        }
+        
+        @MainActor
+        public func webView(_ webView: WKWebView, decidePolicyFor navigationResponse: WKNavigationResponse, decisionHandler: @escaping @MainActor (WKNavigationResponsePolicy) -> Void) {
+            if let httpResponse = navigationResponse.response as? HTTPURLResponse {
+                let disposition = (httpResponse.allHeaderFields["Content-Disposition"] as? String ?? httpResponse.allHeaderFields["content-disposition"] as? String)?.lowercased() ?? ""
+                if disposition.contains("attachment") {
+                    decisionHandler(.download)
+                    return
+                }
+            }
+            
+            if navigationResponse.canShowMIMEType {
+                decisionHandler(.allow)
+            } else {
+                decisionHandler(.download)
+            }
+        }
+        
+        @MainActor
+        public func webView(_ webView: WKWebView, navigationAction: WKNavigationAction, didBecome download: WKDownload) {
+            download.delegate = self
+        }
+        
+        @MainActor
+        public func webView(_ webView: WKWebView, navigationResponse: WKNavigationResponse, didBecome download: WKDownload) {
+            download.delegate = self
+        }
+        
+        // MARK: - WKDownloadDelegate (Local File Saving Support)
+        @MainActor
+        public func download(_ download: WKDownload, decideDestinationUsing response: URLResponse, suggestedFilename: String) async -> URL? {
+            let fileManager = FileManager.default
+            let downloadsFolder = fileManager.urls(for: .downloadsDirectory, in: .userDomainMask).first ?? fileManager.temporaryDirectory
+            
+            var destinationURL = downloadsFolder.appendingPathComponent(suggestedFilename)
+            var counter = 1
+            let baseName = destinationURL.deletingPathExtension().lastPathComponent
+            let ext = destinationURL.pathExtension
+            
+            while fileManager.fileExists(atPath: destinationURL.path) {
+                let newName = ext.isEmpty ? "\(baseName) (\(counter))" : "\(baseName) (\(counter)).\(ext)"
+                destinationURL = downloadsFolder.appendingPathComponent(newName)
+                counter += 1
+            }
+            
+            return destinationURL
+        }
+        
+        public func downloadDidFinish(_ download: WKDownload) {
+            // File saved locally to Downloads folder
+        }
+        
+        public func download(_ download: WKDownload, didFailWithError error: Error, resumeData: Data?) {
+            print("Download failed: \(error.localizedDescription)")
         }
         
         @MainActor
         public func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
             if navigationAction.targetFrame == nil {
-                webView.load(navigationAction.request)
+                if navigationAction.shouldPerformDownload {
+                    // Let download policy handle it
+                } else {
+                    webView.load(navigationAction.request)
+                }
             }
             return nil
         }
