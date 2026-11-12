@@ -48,6 +48,10 @@ public struct ContentView: View {
                 .padding(.top, 14)
                 .zIndex(999)
             }
+            
+            // Download Progress Bar & "Downloaded to [file location]" Popup
+            DownloadHUDView()
+                .zIndex(1000)
         }
         .preferredColorScheme(state.effectiveColorScheme)
         .sheet(isPresented: $showingSettings) {

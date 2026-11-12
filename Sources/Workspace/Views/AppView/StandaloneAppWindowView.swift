@@ -148,6 +148,10 @@ public struct StandaloneAppWindowView: View {
                         .accentColor(app.primaryColor)
                         .ignoresSafeArea()
                 }
+                
+                // Download Progress & Location Popup
+                DownloadHUDView()
+                    .zIndex(1000)
             }
         }
         .frame(minWidth: 700, minHeight: 500)

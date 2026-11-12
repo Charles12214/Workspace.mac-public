@@ -316,11 +316,13 @@ public struct WebKitRepresentable: NSViewRepresentable {
         @MainActor
         public func webView(_ webView: WKWebView, navigationAction: WKNavigationAction, didBecome download: WKDownload) {
             download.delegate = self
+            DownloadManager.shared.registerDownload(download)
         }
         
         @MainActor
         public func webView(_ webView: WKWebView, navigationResponse: WKNavigationResponse, didBecome download: WKDownload) {
             download.delegate = self
+            DownloadManager.shared.registerDownload(download)
         }
         
         // MARK: - WKDownloadDelegate (Local File Saving Support)
@@ -340,15 +342,20 @@ public struct WebKitRepresentable: NSViewRepresentable {
                 counter += 1
             }
             
+            DownloadManager.shared.setDestination(for: download, destinationURL: destinationURL, suggestedFilename: suggestedFilename)
             return destinationURL
         }
         
         public func downloadDidFinish(_ download: WKDownload) {
-            // File saved locally to Downloads folder
+            Task { @MainActor in
+                DownloadManager.shared.finishDownload(download: download)
+            }
         }
         
         public func download(_ download: WKDownload, didFailWithError error: Error, resumeData: Data?) {
-            print("Download failed: \(error.localizedDescription)")
+            Task { @MainActor in
+                DownloadManager.shared.failDownload(download: download, error: error)
+            }
         }
         
         @MainActor
