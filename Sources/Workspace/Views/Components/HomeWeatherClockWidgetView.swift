@@ -10,7 +10,7 @@ public struct HomeWeatherClockWidgetView: View {
     public init() {}
     
     public var body: some View {
-        if service.isWeatherEnabled || service.isTimeEnabled {
+        if service.isWeatherEnabled {
             Button(action: {
                 showingPopover.toggle()
             }) {

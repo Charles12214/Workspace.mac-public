@@ -1,11 +1,13 @@
 import SwiftUI
 import WebKit
+import CoreLocation
 
 public struct OnboardingView: View {
     @ObservedObject var state: AppState
+    @ObservedObject private var weatherService = WeatherService.shared
     @State private var currentStep: Int = 1
     
-    // Step 5 Pin search query
+    // Step 6 Pin search query
     @State private var pinSearchQuery: String = ""
     
     // Final Step soft text animation
@@ -24,49 +26,26 @@ public struct OnboardingView: View {
             ambientBackground
             
             VStack(spacing: 0) {
-                // Top Step Progress Indicator (7 steps)
+                // Top Step Progress Indicator (8 steps)
                 topStepBar
                     .padding(.top, 24)
                     .padding(.horizontal, 36)
                 
                 Spacer()
                 
-                // Step Content (7 Steps)
+                // Step Content Carousel (8 Steps, Unidirectional Right-to-Left Swipe)
                 ZStack {
-                    switch currentStep {
-                    case 1:
-                        step1WelcomeView
-                            .transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity),
-                                                    removal: .move(edge: .leading).combined(with: .opacity)))
-                    case 2:
-                        step2V1OverviewAndRoadmapView
-                            .transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity),
-                                                    removal: .move(edge: .leading).combined(with: .opacity)))
-                    case 3:
-                        step3CustomisationView
-                            .transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity),
-                                                    removal: .move(edge: .leading).combined(with: .opacity)))
-                    case 4:
-                        step4ProfileSetupView
-                            .transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity),
-                                                    removal: .move(edge: .leading).combined(with: .opacity)))
-                    case 5:
-                        step5PinAppsView
-                            .transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity),
-                                                    removal: .move(edge: .leading).combined(with: .opacity)))
-                    case 6:
-                        step6GoogleAuthGuideView
-                            .transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity),
-                                                    removal: .move(edge: .leading).combined(with: .opacity)))
-                    case 7:
-                        step7FinalView
-                            .transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity),
-                                                    removal: .move(edge: .leading).combined(with: .opacity)))
-                    default:
-                        EmptyView()
-                    }
+                    stepContent(for: currentStep)
+                        .id(currentStep)
+                        .transition(
+                            .asymmetric(
+                                insertion: .move(edge: .trailing).combined(with: .opacity),
+                                removal: .move(edge: .leading).combined(with: .opacity)
+                            )
+                        )
                 }
-                .frame(maxWidth: 720, minHeight: 460)
+                .frame(maxWidth: 720, minHeight: 480)
+                .clipped()
                 
                 Spacer()
                 
@@ -76,7 +55,7 @@ public struct OnboardingView: View {
                     .padding(.bottom, 28)
             }
         }
-        .frame(minWidth: 780, minHeight: 600)
+        .frame(minWidth: 780, minHeight: 620)
         .onAppear {
             withAnimation(.easeInOut(duration: 2.5).repeatForever(autoreverses: true)) {
                 geminiGlowPulse = true
@@ -109,10 +88,10 @@ public struct OnboardingView: View {
         }
     }
     
-    // MARK: - Top Step Bar (7 steps)
+    // MARK: - Top Step Bar (8 steps)
     private var topStepBar: some View {
         HStack(spacing: 8) {
-            ForEach(1...7, id: \.self) { step in
+            ForEach(1...8, id: \.self) { step in
                 Capsule()
                     .fill(
                         step <= currentStep
@@ -124,6 +103,31 @@ public struct OnboardingView: View {
             }
         }
         .padding(.horizontal, 40)
+    }
+    
+    // MARK: - Step Router
+    @ViewBuilder
+    private func stepContent(for step: Int) -> some View {
+        switch step {
+        case 1:
+            step1WelcomeView
+        case 2:
+            step2PrivacyView
+        case 3:
+            step3WeatherSetupView
+        case 4:
+            step4CustomisationView
+        case 5:
+            step5ProfileSetupView
+        case 6:
+            step6PinAppsView
+        case 7:
+            step7GoogleAuthGuideView
+        case 8:
+            step8FinalView
+        default:
+            EmptyView()
+        }
     }
     
     // MARK: - Step 1: Welcome Screen
@@ -196,192 +200,328 @@ public struct OnboardingView: View {
         .liquidGlass(cornerRadius: 24)
     }
     
-    // MARK: - Step 2: Welcome to workspace.mac V1.2 (Release Highlights & Roadmap)
-    private var step2V1OverviewAndRoadmapView: some View {
-        VStack(spacing: 16) {
-            VStack(spacing: 5) {
-                HStack(spacing: 6) {
-                    GeminiSparkleShape()
-                        .fill(GeminiPalette.starGradient)
-                        .frame(width: 14, height: 14)
-                    
-                    Text("WORKSPACE.MAC V1.2 RELEASE")
-                        .font(.system(size: 11, weight: .heavy, design: .rounded))
-                        .foregroundStyle(geminiGradient)
-                        .tracking(1.0)
-                }
+    // MARK: - Step 2: Dedicated Privacy Screen (Zero Trackers & Local Security)
+    private var step2PrivacyView: some View {
+        VStack(spacing: 18) {
+            // Shield & Lock Emblem
+            ZStack {
+                Circle()
+                    .fill(Color(hex: "34A853").opacity(0.18))
+                    .frame(width: 78, height: 78)
+                    .blur(radius: 16)
                 
-                Text("Welcome to workspace.mac V1.2")
+                Image(systemName: "lock.shield.fill")
+                    .font(.system(size: 42))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [Color(hex: "34A853"), Color(hex: "4285F4")],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .shadow(color: Color(hex: "34A853").opacity(0.3), radius: 10, y: 4)
+            }
+            .padding(.bottom, 2)
+            
+            VStack(spacing: 5) {
+                Text("Privacy by Design. Zero Trackers.")
                     .font(.system(size: 25, weight: .bold, design: .rounded))
                     .foregroundStyle(.primary)
                 
-                Text("Your native Google Workspace desktop client. Here's what's new in V1.2 and what's coming next.")
-                    .font(.system(size: 12.5))
+                Text("Workspace.mac is built with 100% local privacy. What you do on your Mac stays on your Mac.")
+                    .font(.system(size: 13.5))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 580)
+            }
+            
+            // 3 Clean Reassurance Pillars
+            VStack(spacing: 10) {
+                privacyPillarRow(
+                    icon: "eye.slash.fill",
+                    color: Color(hex: "8B5CF6"),
+                    title: "Zero Telemetry or Trackers",
+                    description: "No Google Analytics, no crash uploaders, and no background telemetry pings. We collect 0 bytes of your personal activity, search queries, or keystrokes."
+                )
+                
+                privacyPillarRow(
+                    icon: "internaldrive.fill",
+                    color: Color(hex: "34A853"),
+                    title: "Sandboxed Apple WebKit Storage",
+                    description: "Your Google session cookies, authentication tokens, and cached documents remain strictly inside macOS's native sandboxed storage."
+                )
+                
+                privacyPillarRow(
+                    icon: "network.badge.shield.half.filled",
+                    color: Color(hex: "1A73E8"),
+                    title: "Direct Official Google Endpoints",
+                    description: "All connections route directly to Google's official servers over end-to-end TLS encryption. Zero intermediary proxy servers."
+                )
+            }
+            .padding(16)
+            .liquidGlass(cornerRadius: 18, tintColor: Color(hex: "34A853"))
+            
+            // Bottom guarantee pill
+            HStack(spacing: 8) {
+                Image(systemName: "checkmark.seal.fill")
+                    .foregroundStyle(Color(hex: "34A853"))
+                    .font(.system(size: 13))
+                
+                Text("Verified 100% local desktop client • Zero telemetry • No account or payment required")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 6)
+            .background(Capsule().fill(Color.primary.opacity(0.04)))
+        }
+        .padding(26)
+        .liquidGlass(cornerRadius: 24)
+    }
+    
+    private func privacyPillarRow(icon: String, color: Color, title: String, description: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(color.opacity(0.16))
+                    .frame(width: 32, height: 32)
+                
+                Image(systemName: icon)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(color)
+            }
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(.primary)
+                
+                Text(description)
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(.secondary)
+                    .lineSpacing(2)
+            }
+            
+            Spacer()
+        }
+    }
+    
+    // MARK: - Step 3: Optional Ambient Weather & Local Clock
+    private var step3WeatherSetupView: some View {
+        VStack(spacing: 16) {
+            // Weather Icon Header
+            ZStack {
+                Circle()
+                    .fill(Color(hex: "FF9500").opacity(0.18))
+                    .frame(width: 78, height: 78)
+                    .blur(radius: 16)
+                
+                Image(systemName: "cloud.sun.fill")
+                    .font(.system(size: 42))
+                    .symbolRenderingMode(.multicolor)
+                    .shadow(color: Color(hex: "FF9500").opacity(0.3), radius: 10, y: 4)
+            }
+            .padding(.bottom, 2)
+            
+            VStack(spacing: 5) {
+                Text("Ambient Weather & Local Time (Optional)")
+                    .font(.system(size: 25, weight: .bold, design: .rounded))
+                    .foregroundStyle(.primary)
+                
+                Text("Glance at real-time weather and local time right on your Home dashboard and top bar.")
+                    .font(.system(size: 13.5))
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
             }
             
-            // Dual-card layout for V1.2 Features and Roadmap
-            HStack(alignment: .top, spacing: 14) {
-                // Card 1: What's new in V1.2
-                VStack(alignment: .leading, spacing: 9) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "checkmark.seal.fill")
-                            .font(.system(size: 13))
-                            .foregroundStyle(Color(hex: "34A853"))
-                        
-                        Text("What's New in V1.2")
-                            .font(.system(size: 13, weight: .bold, design: .rounded))
-                            .foregroundStyle(.primary)
-                    }
+            // Live Preview Card
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("LIVE WIDGET PREVIEW")
+                        .font(.system(size: 10.5, weight: .heavy, design: .rounded))
+                        .foregroundStyle(.secondary)
+                        .tracking(0.8)
                     
-                    ScrollView(showsIndicators: false) {
-                        VStack(alignment: .leading, spacing: 7) {
-                            v1FeatureItem(
-                                icon: "person.2.circle.fill",
-                                title: "Dedicated 5-Account Switcher",
-                                description: "Connect up to 5 isolated local accounts with 1-click switching in the sidebar or settings."
-                            )
-                            v1FeatureItem(
-                                icon: "clock.arrow.circlepath",
-                                title: "Continue Where You Left Off",
-                                description: "Intelligent Home hero card with direct 1-click access to your recent documents."
-                            )
-                            v1FeatureItem(
-                                icon: "arrow.down.circle.fill",
-                                title: "Pre-Downloaded Offline Cache",
-                                description: "Core Workspace apps pre-cached for instant launch & offline access."
-                            )
-                            v1FeatureItem(
-                                icon: "sidebar.right",
-                                title: "Clean Document Canvas",
-                                description: "Permanent removal of Google companion side rail for full-width distraction-free editing."
-                            )
-                            v1FeatureItem(
-                                icon: "square.grid.3x3.fill",
-                                title: "18 Google Workspace Apps",
-                                description: "Docs, Sheets, Slides, Drive, Gmail, Meet, Keep, NotebookLM & more."
-                            )
-                            v1FeatureItem(
-                                icon: "sparkles",
-                                title: "Gemini AI Integration",
-                                description: "Dedicated Gemini AI assistant built right into your workspace."
-                            )
-                            v1FeatureItem(
-                                icon: "macwindow.on.rectangle",
-                                title: "3 Layout Immersion Modes",
-                                description: "Everything, Essentials (top bar only), and 'At a glance' fullscreen."
-                            )
-                            v1FeatureItem(
-                                icon: "circle.lefthalf.filled",
-                                title: "True macOS Appearance",
-                                description: "Light, Dark, and real-time Auto system theme detection."
-                            )
-                        }
-                        .padding(.vertical, 2)
+                    Spacer()
+                    
+                    if weatherService.isWeatherEnabled {
+                        Text(weatherService.detectedCity)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(.secondary)
                     }
-                    .frame(maxHeight: 230)
                 }
-                .padding(14)
-                .liquidGlass(cornerRadius: 16, tintColor: Color(hex: "34A853"))
                 
-                // Card 2: Future Roadmap
-                VStack(alignment: .leading, spacing: 9) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "flag.checkered")
-                            .font(.system(size: 13))
-                            .foregroundStyle(GeminiPalette.blue)
-                        
-                        Text("Future Roadmap")
-                            .font(.system(size: 13, weight: .bold, design: .rounded))
-                            .foregroundStyle(.primary)
+                HStack(spacing: 14) {
+                    if weatherService.isWeatherEnabled {
+                        if let info = weatherService.weatherInfo {
+                            HStack(spacing: 7) {
+                                Image(systemName: info.symbolName)
+                                    .font(.system(size: 18, weight: .semibold))
+                                    .foregroundStyle(WeatherService.symbolColor(for: info.symbolName))
+                                
+                                Text("\(info.formattedTemp)\(weatherService.temperatureUnit.symbol)")
+                                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                                    .foregroundStyle(.primary)
+                                
+                                Text("• \(info.conditionName)")
+                                    .font(.system(size: 12.5))
+                                    .foregroundStyle(.secondary)
+                            }
+                        } else if weatherService.isLoadingWeather {
+                            HStack(spacing: 6) {
+                                ProgressView()
+                                    .scaleEffect(0.65)
+                                    .frame(width: 14, height: 14)
+                                Text("Fetching forecast...")
+                                    .font(.system(size: 12.5))
+                                    .foregroundStyle(.secondary)
+                            }
+                        } else {
+                            HStack(spacing: 6) {
+                                Image(systemName: "location.circle")
+                                    .font(.system(size: 14))
+                                    .foregroundStyle(.secondary)
+                                Text("Awaiting location access")
+                                    .font(.system(size: 12.5))
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    } else {
+                        HStack(spacing: 6) {
+                            Image(systemName: "eye.slash")
+                                .font(.system(size: 13))
+                                .foregroundStyle(.secondary)
+                            Text("Weather Widget Disabled")
+                                .font(.system(size: 12.5, weight: .medium))
+                                .foregroundStyle(.secondary)
+                        }
                     }
                     
-                    ScrollView(showsIndicators: false) {
-                        VStack(alignment: .leading, spacing: 7) {
-                            roadmapItem(
-                                icon: "key.fill",
-                                color: Color(hex: "1A73E8"),
-                                title: "Inbuilt App Google Login",
-                                description: "Seamless persistent preference sync and single-click profile switching."
-                            )
-                            roadmapItem(
-                                icon: "command",
-                                color: Color(hex: "8B5CF6"),
-                                title: "Global Cmd+K Quick Switcher",
-                                description: "Instant keyboard palette to launch apps and find documents in seconds."
-                            )
-                            roadmapItem(
-                                icon: "rectangle.split.2x1.fill",
-                                color: Color(hex: "F4B400"),
-                                title: "Split-View Multitasking",
-                                description: "Side-by-side editing: draft Docs while consulting Gemini AI."
-                            )
-                            roadmapItem(
-                                icon: "menubar.rectangle",
-                                color: Color(hex: "00A4F9"),
-                                title: "Menu Bar Quick Companion",
-                                description: "Instant access to Tasks, Calendar events, and new document shortcuts."
-                            )
-                            roadmapItem(
-                                icon: "bolt.shield.fill",
-                                color: Color(hex: "EA4335"),
-                                title: "Continuous Speed & Stability",
-                                description: "Memory footprint reduction, faster WebKit boots, and enhanced battery life."
-                            )
+                    Spacer()
+                    
+                    if weatherService.isTimeEnabled {
+                        HStack(spacing: 5) {
+                            Image(systemName: "clock")
+                                .font(.system(size: 12))
+                                .foregroundStyle(.secondary)
+                            Text(weatherService.currentTimeString)
+                                .font(.system(size: 13.5, weight: .semibold, design: .monospaced))
+                                .foregroundStyle(.primary)
                         }
-                        .padding(.vertical, 2)
                     }
-                    .frame(maxHeight: 230)
                 }
-                .padding(14)
-                .liquidGlass(cornerRadius: 16, tintColor: GeminiPalette.blue)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.04)))
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.primary.opacity(0.08), lineWidth: 1))
+            }
+            
+            // Settings & Toggles Card
+            VStack(alignment: .leading, spacing: 12) {
+                // Master Toggle
+                Toggle(isOn: $weatherService.isWeatherEnabled) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Enable Ambient Weather")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(.primary)
+                        Text("If switched off, weather will not show on the top bar or home screen.")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .toggleStyle(.switch)
+                
+                if weatherService.isWeatherEnabled {
+                    Divider().opacity(0.3)
+                    
+                    // Location & Zero Trackers Explanation
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(alignment: .top, spacing: 8) {
+                            Image(systemName: "location.fill")
+                                .font(.system(size: 12))
+                                .foregroundStyle(Color(hex: "1A73E8"))
+                                .padding(.top, 1)
+                            
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Requires macOS Location Permission")
+                                    .font(.system(size: 12, weight: .bold))
+                                    .foregroundStyle(.primary)
+                                
+                                Text("Used strictly on your Mac to request local weather from Open-Meteo. Coordinates are never stored, tracked, or sent to any analytics server.")
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(.secondary)
+                                    .lineSpacing(1.5)
+                            }
+                        }
+                        
+                        // Location Action Button / Status
+                        HStack {
+                            if weatherService.isLocationAuthorized {
+                                HStack(spacing: 5) {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .font(.system(size: 12))
+                                        .foregroundStyle(Color(hex: "34A853"))
+                                    Text("Location Authorized (\(weatherService.detectedCity))")
+                                        .font(.system(size: 11.5, weight: .semibold))
+                                        .foregroundStyle(Color(hex: "34A853"))
+                                }
+                            } else {
+                                Button(action: {
+                                    weatherService.requestLocationAuthorization()
+                                }) {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "location.circle.fill")
+                                            .font(.system(size: 11.5))
+                                        Text("Request Location Permission")
+                                            .font(.system(size: 11.5, weight: .semibold))
+                                    }
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
+                                    .background(Capsule().fill(Color(hex: "1A73E8")))
+                                }
+                                .buttonStyle(.plain)
+                            }
+                            
+                            Spacer()
+                            
+                            // Unit Picker
+                            Picker("Unit", selection: $weatherService.temperatureUnit) {
+                                ForEach(TemperatureUnit.allCases) { unit in
+                                    Text(unit.symbol).tag(unit)
+                                }
+                            }
+                            .pickerStyle(.segmented)
+                            .frame(width: 90)
+                            
+                            // 24H Toggle
+                            Picker("Time", selection: $weatherService.is24HourTime) {
+                                Text("12h").tag(false)
+                                Text("24h").tag(true)
+                            }
+                            .pickerStyle(.segmented)
+                            .frame(width: 90)
+                        }
+                        .padding(.top, 4)
+                    }
+                }
+            }
+            .padding(16)
+            .liquidGlass(cornerRadius: 18, tintColor: Color(hex: "FF9500"))
+            
+            // Bottom reassurance note
+            HStack(spacing: 8) {
+                Image(systemName: "hand.raised.fill")
+                    .foregroundStyle(Color(hex: "1A73E8"))
+                    .font(.system(size: 12))
+                
+                Text("Completely optional • No trackers • You can change or disable this anytime in Settings")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.secondary)
             }
         }
-        .padding(24)
+        .padding(26)
         .liquidGlass(cornerRadius: 24)
-    }
-    
-    private func v1FeatureItem(icon: String, title: String, description: String) -> some View {
-        HStack(alignment: .top, spacing: 8) {
-            Image(systemName: icon)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(Color(hex: "34A853"))
-                .frame(width: 16, height: 16)
-            
-            VStack(alignment: .leading, spacing: 1) {
-                Text(title)
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(.primary)
-                
-                Text(description)
-                    .font(.system(size: 10))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-            }
-        }
-        .padding(.vertical, 1)
-    }
-    
-    private func roadmapItem(icon: String, color: Color, title: String, description: String) -> some View {
-        HStack(alignment: .top, spacing: 8) {
-            Image(systemName: icon)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(color)
-                .frame(width: 16, height: 16)
-            
-            VStack(alignment: .leading, spacing: 1) {
-                Text(title)
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(.primary)
-                
-                Text(description)
-                    .font(.system(size: 10))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-            }
-        }
-        .padding(.vertical, 1)
     }
     
     private func featureHighlightPill(icon: String, title: String, subtitle: String, color: Color) -> some View {
@@ -411,8 +551,8 @@ public struct OnboardingView: View {
         )
     }
     
-    // MARK: - Step 3: Customisation Screen
-    private var step3CustomisationView: some View {
+    // MARK: - Step 4: Customisation Screen
+    private var step4CustomisationView: some View {
         VStack(spacing: 24) {
             VStack(spacing: 8) {
                 Text("Select Appearance")
@@ -444,8 +584,8 @@ public struct OnboardingView: View {
         .liquidGlass(cornerRadius: 24)
     }
     
-    // MARK: - Step 4: Local Profile Setup
-    private var step4ProfileSetupView: some View {
+    // MARK: - Step 5: Local Profile Setup
+    private var step5ProfileSetupView: some View {
         VStack(spacing: 22) {
             VStack(spacing: 6) {
                 Text("Set Up Your Profile")
@@ -584,8 +724,8 @@ public struct OnboardingView: View {
         .liquidGlass(cornerRadius: 24)
     }
     
-    // MARK: - Step 5: Pin Your Favorite Apps
-    private var step5PinAppsView: some View {
+    // MARK: - Step 6: Pin Your Favorite Apps
+    private var step6PinAppsView: some View {
         VStack(spacing: 16) {
             VStack(spacing: 6) {
                 Text("Pin Your Favorite Apps")
@@ -688,8 +828,8 @@ public struct OnboardingView: View {
         .liquidGlass(cornerRadius: 24)
     }
     
-    // MARK: - Step 6: Google Workspace Sign-In Guide
-    private var step6GoogleAuthGuideView: some View {
+    // MARK: - Step 7: Google Workspace Sign-In Guide
+    private var step7GoogleAuthGuideView: some View {
         VStack(spacing: 20) {
             VStack(spacing: 6) {
                 Text("Google Workspace Sign-In")
@@ -787,8 +927,8 @@ public struct OnboardingView: View {
         }
     }
     
-    // MARK: - Step 7: Final Setup Screen
-    private var step7FinalView: some View {
+    // MARK: - Step 8: Final Setup Screen
+    private var step8FinalView: some View {
         VStack(spacing: 28) {
             // Animated Soft Pulsing Workspace App Icon
             ZStack {
@@ -818,7 +958,7 @@ public struct OnboardingView: View {
                 }
             }
             
-            // Letter-by-letter uprise animation with blur decay
+            // Sentence-level smooth gradient animation with blur decay
             VStack(spacing: 12) {
                 AnimatedUpriseBlurText(
                     "You're all setup!",
@@ -875,12 +1015,12 @@ public struct OnboardingView: View {
         }
     }
     
-    // MARK: - Bottom Action Bar
+    // MARK: - Bottom Action Bar (Unidirectional Carousel Direction)
     private var bottomActionBar: some View {
         HStack {
             if currentStep > 1 {
                 Button(action: {
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                    withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
                         currentStep -= 1
                     }
                 }) {
@@ -900,14 +1040,14 @@ public struct OnboardingView: View {
             
             Spacer()
             
-            if currentStep < 7 {
+            if currentStep < 8 {
                 Button(action: {
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                    withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
                         currentStep += 1
                     }
                 }) {
                     HStack(spacing: 6) {
-                        Text(currentStep == 6 ? "Review Final Step" : "Continue")
+                        Text(currentStep == 7 ? "Review Final Step" : "Continue")
                             .font(.system(size: 13, weight: .semibold))
                         Image(systemName: "arrow.right")
                             .font(.system(size: 12, weight: .bold))

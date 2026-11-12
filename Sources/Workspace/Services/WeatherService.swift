@@ -68,6 +68,25 @@ public struct WeatherInfo: Sendable {
 public final class WeatherService: NSObject, ObservableObject, CLLocationManagerDelegate {
     public static let shared = WeatherService()
     
+    // MARK: - Dynamic Weather Symbol Colors
+    public static func symbolColor(for name: String) -> Color {
+        if name.contains("sun.max") {
+            return Color(hex: "F4B400")
+        } else if name.contains("sun") {
+            return Color(hex: "FBBC04")
+        } else if name.contains("rain") || name.contains("drizzle") {
+            return Color(hex: "1A73E8")
+        } else if name.contains("snow") || name.contains("snowflake") {
+            return Color(hex: "00A4F9")
+        } else if name.contains("bolt") {
+            return Color(hex: "EA4335")
+        } else if name.contains("moon") {
+            return Color(hex: "9B51E0")
+        } else {
+            return Color.secondary
+        }
+    }
+    
     // User preferences
     private let kShowWeatherKey = "Workspace_ShowWeather"
     private let kShowTimeKey = "Workspace_ShowTime"
@@ -107,12 +126,12 @@ public final class WeatherService: NSObject, ObservableObject, CLLocationManager
     @Published public var weatherInfo: WeatherInfo? = nil
     @Published public var isLoadingWeather: Bool = false
     @Published public var lastUpdated: Date? = nil
+    @Published public var detectedCity: String = "Current Location"
     
     private var clockTimer: AnyCancellable?
     private var weatherTimer: AnyCancellable?
     private var locationManager: CLLocationManager?
     private var lastKnownLocation: CLLocation?
-    private var detectedCity: String = "Current Location"
     
     public override init() {
         // Load preferences with sensible defaults
@@ -184,6 +203,25 @@ public final class WeatherService: NSObject, ObservableObject, CLLocationManager
     }
     
     // MARK: - Location & Reverse Geocoding
+    public var locationAuthorizationStatus: CLAuthorizationStatus {
+        locationManager?.authorizationStatus ?? .notDetermined
+    }
+    
+    public var isLocationAuthorized: Bool {
+        locationAuthorizationStatus == .authorizedAlways
+    }
+    
+    public func requestLocationAuthorization() {
+        let status = locationManager?.authorizationStatus ?? .notDetermined
+        if status == .notDetermined {
+            locationManager?.requestAlwaysAuthorization()
+        } else if status == .authorizedAlways {
+            locationManager?.requestLocation()
+        } else {
+            fetchWeather()
+        }
+    }
+    
     private func setupLocation() {
         locationManager = CLLocationManager()
         locationManager?.delegate = self

@@ -76,6 +76,7 @@ fileprivate struct WrappingHStack: View {
     var body: some View {
         if let grad = gradient {
             textContent(withColor: .white)
+                .opacity(0)
                 .overlay(
                     grad
                         .mask(textContent(withColor: .white))
