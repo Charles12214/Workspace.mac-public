@@ -91,33 +91,40 @@ public struct HomeView: View {
                         }
                     }
                 
-                // MARK: - Animated Gemini Greeting Section
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack(spacing: 8) {
-                        GeminiSparkleShape()
-                            .fill(GeminiPalette.starGradient)
-                            .frame(width: 17, height: 17)
+                // MARK: - Animated Gemini Greeting Section & Home Weather Dashboard
+                HStack(alignment: .top, spacing: 20) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(spacing: 8) {
+                            GeminiSparkleShape()
+                                .fill(GeminiPalette.starGradient)
+                                .frame(width: 17, height: 17)
+                            
+                            Text("GEMINI WORKSPACE.MAC")
+                                .font(.system(size: 11, weight: .heavy, design: .rounded))
+                                .foregroundStyle(geminiGradient)
+                                .tracking(1.0)
+                            
+                            Spacer()
+                        }
                         
-                        Text("GEMINI WORKSPACE.MAC")
-                            .font(.system(size: 11, weight: .heavy, design: .rounded))
-                            .foregroundStyle(geminiGradient)
-                            .tracking(1.0)
+                        AnimatedUpriseBlurText(
+                            greetingManager.currentGreeting(for: state.userProfile.greetingName),
+                            font: .system(size: 30, weight: .bold, design: .rounded),
+                            color: Color.primary
+                        )
+                        .id(greetingManager.animationTrigger)
+                        .padding(.vertical, 2)
                         
-                        Spacer()
+                        Text(state.userProfile.tier.summaryText(name: state.userProfile.greetingName))
+                            .font(.system(size: 13))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
                     }
                     
-                    AnimatedUpriseBlurText(
-                        greetingManager.currentGreeting(for: state.userProfile.greetingName),
-                        font: .system(size: 30, weight: .bold, design: .rounded),
-                        color: Color.primary
-                    )
-                    .id(greetingManager.animationTrigger)
-                    .padding(.vertical, 2)
+                    Spacer(minLength: 16)
                     
-                    Text(state.userProfile.tier.summaryText(name: state.userProfile.greetingName))
-                        .font(.system(size: 13))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
+                    // Large Home Screen Weather & Clock Dashboard Widget
+                    HomeWeatherClockWidgetView()
                 }
                 
                 // MARK: - "Continue where you left off" Hero Section
