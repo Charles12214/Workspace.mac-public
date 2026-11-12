@@ -7,6 +7,13 @@ public struct OnboardingView: View {
     @ObservedObject private var weatherService = WeatherService.shared
     @State private var currentStep: Int = 1
     
+    // Directional Carousel Navigation
+    private enum CarouselDirection {
+        case forward
+        case backward
+    }
+    @State private var carouselDirection: CarouselDirection = .forward
+    
     // Step 6 Pin search query
     @State private var pinSearchQuery: String = ""
     
@@ -33,14 +40,14 @@ public struct OnboardingView: View {
                 
                 Spacer()
                 
-                // Step Content Carousel (8 Steps, Unidirectional Right-to-Left Swipe)
+                // Step Content Carousel (8 Steps, True Bidirectional Carousel)
                 ZStack {
                     stepContent(for: currentStep)
                         .id(currentStep)
                         .transition(
                             .asymmetric(
-                                insertion: .move(edge: .trailing).combined(with: .opacity),
-                                removal: .move(edge: .leading).combined(with: .opacity)
+                                insertion: .move(edge: carouselDirection == .forward ? .trailing : .leading).combined(with: .opacity),
+                                removal: .move(edge: carouselDirection == .forward ? .leading : .trailing).combined(with: .opacity)
                             )
                         )
                 }
@@ -485,22 +492,39 @@ public struct OnboardingView: View {
                             
                             Spacer()
                             
-                            // Unit Picker
-                            Picker("Unit", selection: $weatherService.temperatureUnit) {
-                                ForEach(TemperatureUnit.allCases) { unit in
-                                    Text(unit.symbol).tag(unit)
+                            // Pickers with hidden native labels to prevent vertical letter wrapping
+                            HStack(spacing: 12) {
+                                HStack(spacing: 6) {
+                                    Text("Unit")
+                                        .font(.system(size: 11, weight: .medium))
+                                        .foregroundStyle(.secondary)
+                                        .fixedSize()
+                                    
+                                    Picker("", selection: $weatherService.temperatureUnit) {
+                                        ForEach(TemperatureUnit.allCases) { unit in
+                                            Text(unit.symbol).tag(unit)
+                                        }
+                                    }
+                                    .pickerStyle(.segmented)
+                                    .labelsHidden()
+                                    .frame(width: 76)
+                                }
+                                
+                                HStack(spacing: 6) {
+                                    Text("Time")
+                                        .font(.system(size: 11, weight: .medium))
+                                        .foregroundStyle(.secondary)
+                                        .fixedSize()
+                                    
+                                    Picker("", selection: $weatherService.is24HourTime) {
+                                        Text("12h").tag(false)
+                                        Text("24h").tag(true)
+                                    }
+                                    .pickerStyle(.segmented)
+                                    .labelsHidden()
+                                    .frame(width: 80)
                                 }
                             }
-                            .pickerStyle(.segmented)
-                            .frame(width: 90)
-                            
-                            // 24H Toggle
-                            Picker("Time", selection: $weatherService.is24HourTime) {
-                                Text("12h").tag(false)
-                                Text("24h").tag(true)
-                            }
-                            .pickerStyle(.segmented)
-                            .frame(width: 90)
                         }
                         .padding(.top, 4)
                     }
@@ -1015,11 +1039,12 @@ public struct OnboardingView: View {
         }
     }
     
-    // MARK: - Bottom Action Bar (Unidirectional Carousel Direction)
+    // MARK: - Bottom Action Bar (Bidirectional Carousel Direction)
     private var bottomActionBar: some View {
         HStack {
             if currentStep > 1 {
                 Button(action: {
+                    carouselDirection = .backward
                     withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
                         currentStep -= 1
                     }
@@ -1042,6 +1067,7 @@ public struct OnboardingView: View {
             
             if currentStep < 8 {
                 Button(action: {
+                    carouselDirection = .forward
                     withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
                         currentStep += 1
                     }
