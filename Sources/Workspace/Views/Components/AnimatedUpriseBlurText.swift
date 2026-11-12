@@ -74,7 +74,18 @@ fileprivate struct WrappingHStack: View {
     let baseDelay: Double
     
     var body: some View {
-        // Natural wrapping flow
+        if let grad = gradient {
+            textContent(withColor: .white)
+                .overlay(
+                    grad
+                        .mask(textContent(withColor: .white))
+                )
+        } else {
+            textContent(withColor: color ?? Color.primary)
+        }
+    }
+    
+    private func textContent(withColor charColor: Color) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 0) {
             ForEach(Array(wordsWithIndices.enumerated()), id: \.offset) { wordIdx, item in
                 HStack(spacing: letterSpacing) {
@@ -83,8 +94,7 @@ fileprivate struct WrappingHStack: View {
                         SingleAnimatedCharacter(
                             char: char,
                             font: font,
-                            gradient: gradient,
-                            color: color,
+                            color: charColor,
                             isVisible: isVisible,
                             delay: Double(globalIndex) * baseDelay
                         )
@@ -104,19 +114,14 @@ fileprivate struct WrappingHStack: View {
 fileprivate struct SingleAnimatedCharacter: View {
     let char: Character
     let font: Font
-    let gradient: LinearGradient?
-    let color: Color?
+    let color: Color
     let isVisible: Bool
     let delay: Double
     
     var body: some View {
         Text(String(char))
             .font(font)
-            .foregroundStyle(
-                gradient != nil
-                    ? AnyShapeStyle(gradient!)
-                    : (color != nil ? AnyShapeStyle(color!) : AnyShapeStyle(Color.primary))
-            )
+            .foregroundStyle(color)
             .opacity(isVisible ? 1.0 : 0.0)
             .blur(radius: isVisible ? 0 : 8)
             .offset(y: isVisible ? 0 : 18)
