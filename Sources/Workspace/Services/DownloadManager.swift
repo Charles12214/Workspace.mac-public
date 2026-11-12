@@ -2,6 +2,7 @@ import Foundation
 import WebKit
 import AppKit
 import SwiftUI
+import PDFKit
 
 public struct DownloadItemInfo: Identifiable, Equatable, Sendable {
     public let id: UUID
@@ -149,5 +150,27 @@ public final class DownloadManager: ObservableObject {
     
     public func showInFinder(url: URL) {
         NSWorkspace.shared.activateFileViewerSelecting([url])
+    }
+    
+    // MARK: - Native Printing for Downloaded Documents (e.g. Google Docs PDF exports)
+    public func printFile(at url: URL) {
+        if let pdfDoc = PDFDocument(url: url) {
+            let printInfo = NSPrintInfo.shared
+            printInfo.isHorizontallyCentered = true
+            printInfo.isVerticallyCentered = true
+            if let op = pdfDoc.printOperation(for: printInfo, scalingMode: .pageScaleToFit, autoRotate: true) {
+                op.showsPrintPanel = true
+                op.showsProgressPanel = true
+                if let window = NSApp.keyWindow ?? NSApp.windows.first {
+                    op.runModal(for: window, delegate: nil, didRun: nil, contextInfo: nil)
+                } else {
+                    op.run()
+                }
+                return
+            }
+        }
+        
+        // Fallback for non-PDF files: reveal or open
+        NSWorkspace.shared.open(url)
     }
 }

@@ -153,8 +153,28 @@ public struct DownloadHUDView: View {
             
             Spacer(minLength: 8)
             
-            // Action button: Show in Finder
+            // Action buttons: Print & Show in Finder
             if let url = item.destinationURL {
+                if url.pathExtension.lowercased() == "pdf" {
+                    Button(action: {
+                        manager.printFile(at: url)
+                    }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "printer.fill")
+                                .font(.system(size: 11, weight: .semibold))
+                            Text("Print...")
+                                .font(.system(size: 11.5, weight: .semibold))
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(Color(hex: "1A73E8"))
+                        .foregroundStyle(.white)
+                        .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .help("Print document natively without opening Preview")
+                }
+                
                 Button(action: {
                     manager.showInFinder(url: url)
                 }) {
@@ -162,8 +182,8 @@ public struct DownloadHUDView: View {
                         Image(systemName: "folder")
                             .font(.system(size: 11, weight: .semibold))
                         Text("Show in Finder")
-                            .font(.system(size: 11.5, weight: .semibold))
                     }
+                    .font(.system(size: 11.5, weight: .semibold))
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
                     .background(Color.primary.opacity(0.08))

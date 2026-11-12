@@ -125,6 +125,86 @@ public final class AppState: ObservableObject {
         currentZoom = 1.0
     }
     
+    // MARK: - Native Printing
+    public func triggerNativePrint() {
+        guard let wv = activeWebView else { return }
+        wv.evaluateJavaScript("if (typeof window.print === 'function') { window.print(); } else { window.webkit.messageHandlers.printHandler.postMessage('print'); }") { [weak self, weak wv] _, error in
+            if error != nil {
+                DispatchQueue.main.async {
+                    guard let webView = wv else { return }
+                    self?.runNativePrintOperation(for: webView)
+                }
+            }
+        }
+    }
+    
+    public func runNativePrintOperation(for webView: WKWebView) {
+        let printInfo = NSPrintInfo.shared
+        printInfo.isHorizontallyCentered = true
+        printInfo.isVerticallyCentered = false
+        
+        let operation = webView.printOperation(with: printInfo)
+        operation.showsPrintPanel = true
+        operation.showsProgressPanel = true
+        
+        if let window = webView.window ?? NSApp.keyWindow ?? NSApp.windows.first {
+            operation.runModal(for: window, delegate: nil, didRun: nil, contextInfo: nil)
+        } else {
+            operation.run()
+        }
+    }
+    
+    // MARK: - Dynamic Active App Detection from URL
+    public func app(for urlString: String) -> WorkspaceAppItem? {
+        guard !urlString.isEmpty, let url = URL(string: urlString), let host = url.host?.lowercased() else {
+            return nil
+        }
+        
+        let path = url.path.lowercased()
+        
+        if host.contains("docs.google.com") {
+            if path.contains("/document") {
+                return apps.first(where: { $0.id == "docs" })
+            } else if path.contains("/spreadsheets") {
+                return apps.first(where: { $0.id == "sheets" })
+            } else if path.contains("/presentation") {
+                return apps.first(where: { $0.id == "slides" })
+            } else if path.contains("/forms") {
+                return apps.first(where: { $0.id == "forms" })
+            } else {
+                return apps.first(where: { $0.id == "docs" })
+            }
+        } else if host.contains("sheets.google.com") {
+            return apps.first(where: { $0.id == "sheets" })
+        } else if host.contains("slides.google.com") {
+            return apps.first(where: { $0.id == "slides" })
+        } else if host.contains("forms.google.com") {
+            return apps.first(where: { $0.id == "forms" })
+        } else if host.contains("drive.google.com") {
+            return apps.first(where: { $0.id == "drive" })
+        } else if host.contains("mail.google.com") {
+            return apps.first(where: { $0.id == "gmail" })
+        } else if host.contains("calendar.google.com") {
+            return apps.first(where: { $0.id == "calendar" })
+        } else if host.contains("meet.google.com") {
+            return apps.first(where: { $0.id == "meet" })
+        } else if host.contains("chat.google.com") {
+            return apps.first(where: { $0.id == "chat" })
+        } else if host.contains("keep.google.com") {
+            return apps.first(where: { $0.id == "keep" })
+        } else if host.contains("notebooklm.google.com") {
+            return apps.first(where: { $0.id == "notebooklm" })
+        } else if host.contains("sites.google.com") {
+            return apps.first(where: { $0.id == "sites" })
+        } else if host.contains("contacts.google.com") {
+            return apps.first(where: { $0.id == "contacts" })
+        } else if host.contains("gemini.google.com") {
+            return apps.first(where: { $0.id == "gemini" })
+        }
+        
+        return nil
+    }
+    
     public func dismissUpdate(_ tag: String) {
         dismissedUpdateTags.insert(tag)
         UserDefaults.standard.set(Array(dismissedUpdateTags), forKey: "dismissedUpdateTags")

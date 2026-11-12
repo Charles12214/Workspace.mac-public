@@ -17,6 +17,11 @@ public struct StandaloneAppWindowView: View {
     @State private var pageTitle: String = ""
     @State private var currentZoom: CGFloat = 1.0
     
+    // Dynamic Active App: switches automatically when user navigates (e.g. Drive -> Docs)
+    private var displayApp: WorkspaceAppItem {
+        AppState.shared.app(for: currentUrlString) ?? app
+    }
+    
     public init(app: WorkspaceAppItem, userEmail: String = "", customUrl: URL? = nil) {
         self.app = app
         self.userEmail = userEmail
@@ -102,15 +107,18 @@ public struct StandaloneAppWindowView: View {
                 
                 Spacer()
                 
-                // App Icon & Title centered
+                // App Icon & Title centered (Dynamically updates when navigating)
                 HStack(spacing: 8) {
-                    GoogleAppIconView(appId: app.id, size: 16)
+                    GoogleAppIconView(appId: displayApp.id, size: 16)
+                        .id("icon_\(displayApp.id)")
                     
-                    Text(pageTitle.isEmpty ? app.name : pageTitle)
+                    Text(pageTitle.isEmpty ? displayApp.name : pageTitle)
                         .font(.system(size: 12, weight: .semibold, design: .rounded))
                         .foregroundStyle(.primary)
                         .lineLimit(1)
+                        .id("title_\(displayApp.id)")
                 }
+                .animation(.easeInOut(duration: 0.2), value: displayApp.id)
                 .frame(maxWidth: 320)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 4)

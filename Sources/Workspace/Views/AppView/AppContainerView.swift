@@ -83,6 +83,11 @@ public struct WorkspaceAppContainer: View {
     @State private var isHoveringLeftEdge: Bool = false
     @State private var isDraggingBookmark: Bool = false
     
+    // Dynamic Active App: switches automatically when user navigates (e.g. Drive -> Docs)
+    private var displayApp: WorkspaceAppItem {
+        state.app(for: currentUrlString) ?? app
+    }
+    
     public init(app: WorkspaceAppItem, state: AppState, showingSettings: Binding<Bool>) {
         self.app = app
         self.state = state
@@ -390,18 +395,21 @@ public struct WorkspaceAppContainer: View {
             
             Spacer()
             
-            // App Title & Icon in Center
+            // App Title & Icon in Center (Dynamically updates when navigating between Docs/Sheets/Drive)
             HStack(spacing: 7) {
-                GoogleAppIconView(appId: app.id, size: 16)
+                GoogleAppIconView(appId: displayApp.id, size: 16)
+                    .id("icon_\(displayApp.id)")
                 
-                Text(app.name)
+                Text(displayApp.name)
                     .font(.system(size: 13, weight: .semibold, design: .rounded))
                     .foregroundStyle(.primary)
+                    .id("title_\(displayApp.id)")
                 
                 Image(systemName: "lock.fill")
                     .font(.system(size: 9))
                     .foregroundStyle(Color(hex: "34A853"))
             }
+            .animation(.easeInOut(duration: 0.2), value: displayApp.id)
             .padding(.horizontal, 12)
             .padding(.vertical, 4)
             .background(Capsule().fill(Color.primary.opacity(0.04)))
@@ -409,14 +417,14 @@ public struct WorkspaceAppContainer: View {
             Spacer()
             
             // MARK: - Open in Separate Window Button
-            Button(action: { state.openSeparateWindow(for: app) }) {
+            Button(action: { state.openSeparateWindow(for: displayApp) }) {
                 Image(systemName: "arrow.up.forward.app")
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(.secondary)
                     .padding(6)
             }
             .buttonStyle(.plain)
-            .help("Open \(app.name) in Separate Window")
+            .help("Open \(displayApp.name) in Separate Window")
             
             // MARK: - View Mode Switcher (Everything, Essentials, Minimalist, Separated)
             HStack(spacing: 2) {
@@ -504,12 +512,13 @@ public struct WorkspaceAppContainer: View {
             .buttonStyle(.plain)
             .help("Return Home")
             
-            // App Icon & Name
+            // App Icon & Name (Dynamically updates)
             HStack(spacing: 6) {
-                GoogleAppIconView(appId: app.id, size: 14)
-                Text(app.name)
+                GoogleAppIconView(appId: displayApp.id, size: 14)
+                Text(displayApp.name)
                     .font(.system(size: 12, weight: .semibold, design: .rounded))
             }
+            .animation(.easeInOut(duration: 0.2), value: displayApp.id)
             
             Divider().frame(height: 14).opacity(0.3)
             

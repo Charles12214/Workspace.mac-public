@@ -33,6 +33,12 @@ struct WorkspaceApp: App {
                 }
                 .keyboardShortcut("h", modifiers: [.command, .shift])
             }
+            CommandGroup(replacing: .printItem) {
+                Button("Print...") {
+                    AppState.shared.triggerNativePrint()
+                }
+                .keyboardShortcut("p", modifiers: [.command])
+            }
             CommandMenu("View") {
                 Button("Zoom In") {
                     AppState.shared.zoomIn()

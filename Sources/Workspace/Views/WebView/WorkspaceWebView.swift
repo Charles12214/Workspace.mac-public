@@ -179,7 +179,7 @@ public struct WebKitRepresentable: NSViewRepresentable {
         // Match exact native Safari 27.2 User-Agent on macOS for crisp Retina canvas rendering in Google Docs & Sheets
         configuration.applicationNameForUserAgent = "Version/27.2 Safari/605.1.15"
         
-        // Suppress browser upgrade banners and hide companion sidebar cleanly via CSS (never inject into subframes or accounts.google.com)
+        // Suppress browser upgrade banners, hide companion sidebar cleanly via CSS, and route window.print() to native print handler
         let customScript = """
         if (!window.location.hostname.includes('accounts.google.com')) {
             const style = document.createElement('style');
@@ -197,10 +197,20 @@ public struct WebKitRepresentable: NSViewRepresentable {
                 }
             `;
             (document.head || document.documentElement).appendChild(style);
+            
+            // Bridge native window.print() so Google Docs/Sheets/Slides trigger native macOS print sheet
+            window.print = function() {
+                try {
+                    window.webkit.messageHandlers.printHandler.postMessage('print');
+                } catch(e) {
+                    console.warn('Native printHandler not available', e);
+                }
+            };
         }
         """
         let userScript = WKUserScript(source: customScript, injectionTime: .atDocumentEnd, forMainFrameOnly: true)
         configuration.userContentController.addUserScript(userScript)
+        configuration.userContentController.add(LeakAvoider(delegate: context.coordinator), name: "printHandler")
         
         // Initialize with real screen frame so WebKit and Google Docs initialize at full Retina resolution
         let initialFrame = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1400, height: 900)
@@ -227,7 +237,7 @@ public struct WebKitRepresentable: NSViewRepresentable {
     
     public func updateNSView(_ nsView: WKWebView, context: Context) {}
     
-    public class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate {
+    public class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate, WKScriptMessageHandler {
         var parent: WebKitRepresentable
         private var observers: [NSKeyValueObservation] = []
         
@@ -369,5 +379,30 @@ public struct WebKitRepresentable: NSViewRepresentable {
             }
             return nil
         }
+        
+        // MARK: - WKScriptMessageHandler (Native Printing)
+        public func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+            if message.name == "printHandler" {
+                Task { @MainActor in
+                    if let webView = message.webView ?? AppState.shared.activeWebView {
+                        AppState.shared.runNativePrintOperation(for: webView)
+                    }
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Weak Script Message Handler to Prevent Retain Cycles
+private final class LeakAvoider: NSObject, WKScriptMessageHandler {
+    private weak var delegate: WKScriptMessageHandler?
+    
+    init(delegate: WKScriptMessageHandler) {
+        self.delegate = delegate
+        super.init()
+    }
+    
+    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        delegate?.userContentController(userContentController, didReceive: message)
     }
 }
