@@ -36,6 +36,13 @@ public final class AppState: ObservableObject {
     @Published public var activeAccountId: String = ""
     @Published public var isAddingNewAccount: Bool = false
     
+    // MARK: - Multitasking Tiling State (Up to 4 Apps)
+    private let kHasSeenMultitaskingWarningKey = "Workspace_HasSeenMultitaskingWarning"
+    @Published public var tiledAppIds: [String] = []
+    @Published public var focusedTiledAppId: String? = nil
+    @Published public var showingMultitaskingWarning: Bool = false
+    public var pendingTiledAppToAdd: WorkspaceAppItem? = nil
+    
     public var activeAccount: UserProfile {
         if let acc = accounts.first(where: { $0.accountId == activeAccountId }) {
             return acc
@@ -587,6 +594,10 @@ public final class AppState: ObservableObject {
         
         withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
             selectedAppId = app.id
+            if !tiledAppIds.contains(app.id) {
+                tiledAppIds = [app.id]
+            }
+            focusedTiledAppId = app.id
         }
     }
     
@@ -604,7 +615,127 @@ public final class AppState: ObservableObject {
         
         withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
             selectedAppId = app.id
+            if !tiledAppIds.contains(app.id) {
+                tiledAppIds = [app.id]
+            }
+            focusedTiledAppId = app.id
         }
+    }
+    
+    // MARK: - Multitasking Management
+    public var hasSeenMultitaskingWarning: Bool {
+        get { UserDefaults.standard.bool(forKey: kHasSeenMultitaskingWarningKey) }
+        set { UserDefaults.standard.set(newValue, forKey: kHasSeenMultitaskingWarningKey) }
+    }
+    
+    public var isMultitaskingActive: Bool {
+        tiledAppIds.count > 1
+    }
+    
+    public var tiledApps: [WorkspaceAppItem] {
+        tiledAppIds.compactMap { id in apps.first(where: { $0.id == id }) }
+    }
+    
+    public func requestAddTiledApp(_ app: WorkspaceAppItem, at index: Int? = nil) {
+        guard tiledAppIds.count < 4 else { return }
+        
+        // If app is already tiled, just focus it
+        if tiledAppIds.contains(app.id) {
+            focusedTiledAppId = app.id
+            return
+        }
+        
+        // Check if user has seen performance warning
+        if !hasSeenMultitaskingWarning && !tiledAppIds.isEmpty {
+            pendingTiledAppToAdd = app
+            showingMultitaskingWarning = true
+            return
+        }
+        
+        addTiledAppDirect(app, at: index)
+    }
+    
+    public func addTiledAppDirect(_ app: WorkspaceAppItem, at index: Int? = nil) {
+        if let idx = apps.firstIndex(where: { $0.id == app.id }) {
+            apps[idx].lastUsed = Date()
+            apps[idx].launchCount += 1
+            persistAppData()
+        }
+        
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+            if tiledAppIds.isEmpty, let cur = selectedAppId {
+                tiledAppIds = [cur]
+            }
+            if !tiledAppIds.contains(app.id) {
+                if let idx = index, idx <= tiledAppIds.count {
+                    tiledAppIds.insert(app.id, at: idx)
+                } else {
+                    tiledAppIds.append(app.id)
+                }
+            }
+            selectedAppId = tiledAppIds.first
+            focusedTiledAppId = app.id
+        }
+    }
+    
+    public func confirmMultitaskingWarning(dontShowAgain: Bool) {
+        if dontShowAgain {
+            hasSeenMultitaskingWarning = true
+        }
+        showingMultitaskingWarning = false
+        if let pending = pendingTiledAppToAdd {
+            addTiledAppDirect(pending)
+            pendingTiledAppToAdd = nil
+        }
+    }
+    
+    public func cancelMultitaskingWarning() {
+        showingMultitaskingWarning = false
+        pendingTiledAppToAdd = nil
+    }
+    
+    public func closeTiledApp(id: String) {
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+            tiledAppIds.removeAll(where: { $0 == id })
+            if tiledAppIds.isEmpty {
+                selectedAppId = nil
+                focusedTiledAppId = nil
+            } else {
+                selectedAppId = tiledAppIds.first
+                if focusedTiledAppId == id {
+                    focusedTiledAppId = tiledAppIds.first
+                }
+            }
+        }
+    }
+    
+    public func cycleTiledApps(clockwise: Bool = true) {
+        guard tiledAppIds.count > 1 else { return }
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+            if clockwise {
+                let first = tiledAppIds.removeFirst()
+                tiledAppIds.append(first)
+            } else {
+                let last = tiledAppIds.removeLast()
+                tiledAppIds.insert(last, at: 0)
+            }
+            selectedAppId = tiledAppIds.first
+            focusedTiledAppId = tiledAppIds.first
+        }
+    }
+    
+    public func maximizeTiledApp(id: String) {
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+            tiledAppIds = [id]
+            selectedAppId = id
+            focusedTiledAppId = id
+        }
+    }
+    
+    public func popOutTiledApp(id: String) {
+        guard let app = apps.first(where: { $0.id == id }) else { return }
+        closeTiledApp(id: id)
+        openSeparateWindow(for: app)
     }
     
     public func togglePin(appId: String) {
@@ -704,6 +835,8 @@ public final class AppState: ObservableObject {
     public func goHome() {
         withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
             selectedAppId = nil
+            tiledAppIds = []
+            focusedTiledAppId = nil
         }
     }
     

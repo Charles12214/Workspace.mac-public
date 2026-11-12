@@ -115,40 +115,9 @@ public struct WorkspaceAppContainer: View {
                             Divider().opacity(0.2)
                         }
                         
-                        // Embedded WebKit View
-                        ZStack(alignment: .top) {
-                            WebKitRepresentable(
-                                url: state.overrideUrlForApp[app.id] ?? app.resolvedUrl(for: state.userProfile.email),
-                                app: app,
-                                webViewOut: $webView,
-                                canGoBack: $canGoBack,
-                                canGoForward: $canGoForward,
-                                isLoading: $isLoading,
-                                currentUrlString: $currentUrlString,
-                                pageTitle: $pageTitle
-                            )
-                            .id("\(app.id)_\(state.activeAccountId)")
-                            .ignoresSafeArea()
-                            
-                            // Top loading line
-                            if isLoading {
-                                ProgressView()
-                                    .progressViewStyle(.linear)
-                                    .frame(height: 2)
-                                    .accentColor(app.primaryColor)
-                                    .ignoresSafeArea()
-                            }
-                            
-                            // Top Windowed-Fullscreen Zoom Trigger (Double-click)
-                            Color.clear
-                                .frame(height: 24)
-                                .contentShape(Rectangle())
-                                .onTapGesture(count: 2) {
-                                    if let window = NSApp.keyWindow ?? NSApp.windows.first {
-                                        window.zoom(nil)
-                                    }
-                                }
-                        }
+                        // Embedded Multi-App Grid (1 to 4 Tiled Apps)
+                        MultiAppGridView(state: state, defaultApp: app)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
                 }
                 
@@ -395,26 +364,107 @@ public struct WorkspaceAppContainer: View {
             
             Spacer()
             
-            // App Title & Icon in Center (Dynamically updates when navigating between Docs/Sheets/Drive)
-            HStack(spacing: 7) {
-                GoogleAppIconView(appId: displayApp.id, size: 16)
-                    .id("icon_\(displayApp.id)")
-                
-                Text(displayApp.name)
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.primary)
-                    .id("title_\(displayApp.id)")
-                
-                Image(systemName: "lock.fill")
-                    .font(.system(size: 9))
-                    .foregroundStyle(Color(hex: "34A853"))
+            // App Title or Multi-App Tiling Indicator in Center
+            if state.isMultitaskingActive {
+                HStack(spacing: 8) {
+                    HStack(spacing: -4) {
+                        ForEach(state.tiledApps) { tiledApp in
+                            GoogleAppIconView(appId: tiledApp.id, size: 16)
+                                .background(Circle().fill(Color(nsColor: .windowBackgroundColor)))
+                        }
+                    }
+                    
+                    Text("\(state.tiledApps.count) Apps Tiled")
+                        .font(.system(size: 12.5, weight: .bold, design: .rounded))
+                        .foregroundStyle(Color(hex: "1A73E8"))
+                    
+                    Button(action: { state.cycleTiledApps(clockwise: true) }) {
+                        HStack(spacing: 3) {
+                            Image(systemName: "arrow.2.squarepath")
+                                .font(.system(size: 10, weight: .semibold))
+                            Text("Cycle")
+                                .font(.system(size: 10, weight: .medium))
+                        }
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(Color.primary.opacity(0.06)))
+                    }
+                    .buttonStyle(.plain)
+                    .help("Cycle pane positions (Cmd + Shift + ])")
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .background(Capsule().fill(Color(hex: "1A73E8").opacity(0.08)))
+                .overlay(Capsule().stroke(Color(hex: "1A73E8").opacity(0.25), lineWidth: 1))
+            } else {
+                HStack(spacing: 7) {
+                    GoogleAppIconView(appId: displayApp.id, size: 16)
+                        .id("icon_\(displayApp.id)")
+                    
+                    Text(displayApp.name)
+                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.primary)
+                        .id("title_\(displayApp.id)")
+                    
+                    Image(systemName: "lock.fill")
+                        .font(.system(size: 9))
+                        .foregroundStyle(Color(hex: "34A853"))
+                }
+                .animation(.easeInOut(duration: 0.2), value: displayApp.id)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 4)
+                .background(Capsule().fill(Color.primary.opacity(0.04)))
             }
-            .animation(.easeInOut(duration: 0.2), value: displayApp.id)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 4)
-            .background(Capsule().fill(Color.primary.opacity(0.04)))
             
             Spacer()
+            
+            // MARK: - Split / Multitasking Menu Button
+            Menu {
+                if state.isMultitaskingActive {
+                    Button(action: { state.cycleTiledApps(clockwise: true) }) {
+                        Label("Cycle Positions Clockwise", systemImage: "arrow.2.squarepath")
+                    }
+                    .keyboardShortcut("]", modifiers: [.command, .shift])
+                    
+                    Button(action: { state.cycleTiledApps(clockwise: false) }) {
+                        Label("Cycle Positions Counter-Clockwise", systemImage: "arrow.triangle.2.circlepath")
+                    }
+                    .keyboardShortcut("[", modifiers: [.command, .shift])
+                    
+                    Divider()
+                    
+                    Button(action: {
+                        if let focused = state.focusedTiledAppId {
+                            state.maximizeTiledApp(id: focused)
+                        } else if let first = state.tiledAppIds.first {
+                            state.maximizeTiledApp(id: first)
+                        }
+                    }) {
+                        Label("Exit Split Screen (Focus Single App)", systemImage: "rectangle")
+                    }
+                    
+                    Divider()
+                }
+                
+                Section("Tile Another App (Up to 4)") {
+                    ForEach(state.apps.filter { !state.tiledAppIds.contains($0.id) }) { otherApp in
+                        Button(action: {
+                            state.requestAddTiledApp(otherApp)
+                        }) {
+                            Label(otherApp.name, systemImage: otherApp.iconSymbol)
+                        }
+                    }
+                }
+            } label: {
+                Image(systemName: state.isMultitaskingActive ? "rectangle.split.2x1.fill" : "rectangle.split.2x1")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(state.isMultitaskingActive ? Color(hex: "1A73E8") : Color.secondary)
+                    .padding(6)
+            }
+            .menuStyle(.borderlessButton)
+            .frame(width: 24)
+            .help("Multi-App Split Screen (Up to 4 Apps)")
             
             // MARK: - Open in Separate Window Button
             Button(action: { state.openSeparateWindow(for: displayApp) }) {

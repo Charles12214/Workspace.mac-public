@@ -379,6 +379,9 @@ public struct SidebarView: View {
                             return provider
                         }
                         .contextMenu {
+                            Button("Open in Split Screen") {
+                                state.requestAddTiledApp(app)
+                            }
                             Button("Open in Separate Window") {
                                 state.openSeparateWindow(for: app)
                             }
@@ -506,6 +509,9 @@ public struct SidebarItemRow: View {
             return provider
         }
         .contextMenu {
+            Button("Open in Split Screen") {
+                AppState.shared.requestAddTiledApp(app)
+            }
             Button("Open in Separate Window") {
                 onOpenSeparate()
             }
