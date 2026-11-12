@@ -3,6 +3,7 @@ import AppKit
 
 public struct SettingsView: View {
     @ObservedObject var state: AppState
+    @ObservedObject private var weatherService = WeatherService.shared
     @Environment(\.dismiss) private var dismiss
     
     @State private var pulseAtAGlance: Bool = false
@@ -163,6 +164,84 @@ public struct SettingsView: View {
                             pulseAtAGlance = true
                         }
                     }
+                    
+                    // MARK: - Live Weather & Local Time Widget Section
+                    VStack(alignment: .leading, spacing: 14) {
+                        HStack {
+                            Text("WEATHER & LOCAL CLOCK")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Text("Top-Right Header Widget")
+                                .font(.system(size: 10))
+                                .foregroundStyle(.secondary)
+                        }
+                        
+                        Toggle(isOn: $weatherService.isTimeEnabled) {
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text("Show Local Time")
+                                    .font(.system(size: 12, weight: .medium))
+                                Text("Display current time in the top-right header.")
+                                    .font(.system(size: 10.5))
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .toggleStyle(.checkbox)
+                        
+                        if weatherService.isTimeEnabled {
+                            Picker("Time Format", selection: $weatherService.is24HourTime) {
+                                Text("24-Hour (16:40)").tag(true)
+                                Text("12-Hour (4:40 PM)").tag(false)
+                            }
+                            .pickerStyle(.segmented)
+                            .padding(.leading, 20)
+                        }
+                        
+                        Divider().opacity(0.3)
+                        
+                        Toggle(isOn: $weatherService.isWeatherEnabled) {
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text("Show Live Weather & Forecast")
+                                    .font(.system(size: 12, weight: .medium))
+                                Text("Displays current temperature and weather conditions with interactive forecast popover.")
+                                    .font(.system(size: 10.5))
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .toggleStyle(.checkbox)
+                        
+                        if weatherService.isWeatherEnabled {
+                            HStack {
+                                Text("Temperature Unit")
+                                    .font(.system(size: 12, weight: .medium))
+                                Spacer()
+                                Picker("", selection: $weatherService.temperatureUnit) {
+                                    Text("Celsius (°C)").tag(TemperatureUnit.celsius)
+                                    Text("Fahrenheit (°F)").tag(TemperatureUnit.fahrenheit)
+                                }
+                                .pickerStyle(.segmented)
+                                .frame(width: 180)
+                            }
+                            .padding(.leading, 20)
+                            
+                            HStack {
+                                Spacer()
+                                Button(action: {
+                                    weatherService.fetchWeather()
+                                }) {
+                                    HStack(spacing: 5) {
+                                        Image(systemName: "arrow.clockwise")
+                                        Text("Refresh Weather Now")
+                                    }
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundStyle(Color(hex: "1A73E8"))
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                    .padding(16)
+                    .liquidGlass(cornerRadius: 14)
                     
                     // Home Screen Tile Customisation
                     VStack(alignment: .leading, spacing: 12) {

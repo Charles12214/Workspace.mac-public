@@ -126,8 +126,8 @@ public struct StandaloneAppWindowView: View {
                 
                 Spacer()
                 
-                // Placeholder to balance the left traffic lights space
-                Color.clear.frame(width: 72, height: 1)
+                // Live Weather & Local Time Widget in Standalone Window
+                WeatherTimeWidgetView()
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)

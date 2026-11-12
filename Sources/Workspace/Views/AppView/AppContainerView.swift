@@ -436,6 +436,9 @@ public struct WorkspaceAppContainer: View {
             .padding(2)
             .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.05)))
             
+            // MARK: - Live Weather & Local Time Widget
+            WeatherTimeWidgetView()
+            
             // Settings Button
             Button(action: { showingSettings = true }) {
                 Image(systemName: "gearshape")
