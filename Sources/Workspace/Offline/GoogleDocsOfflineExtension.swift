@@ -284,6 +284,43 @@ public struct GoogleDocsOfflineExtension {
         document.addEventListener('input', scheduleTracking, { passive: true });
         document.addEventListener('keyup', scheduleTracking, { passive: true });
         
+        // Home screen document scanner (Docs, Sheets, Slides recent documents)
+        function scanHomeScreenDocuments() {
+            const isHomeScreen = /^\\/(document|spreadsheets|presentation)\\/?($|\\?)/.test(window.location.pathname);
+            if (!isHomeScreen) return;
+            
+            const rows = document.querySelectorAll('.docs-homescreen-list-item, [role="row"], .view-row, .docs-homescreen-grid-item');
+            const scanned = [];
+            rows.forEach(row => {
+                const titleEl = row.querySelector('.docs-homescreen-list-item-title-value, [aria-label], .docs-homescreen-grid-item-title');
+                const linkEl = row.querySelector('a[href*="/d/"]');
+                const title = (titleEl && (titleEl.innerText || titleEl.getAttribute('aria-label'))) || '';
+                const href = (linkEl && linkEl.href) || '';
+                const match = href.match(/\\/d\\/([a-zA-Z0-9_-]+)/);
+                if (match && title) {
+                    const docId = match[1];
+                    const cleanTitle = title.replace(/ - Google (Docs|Sheets|Slides)$/i, '').trim();
+                    scanned.push({
+                        docId: docId,
+                        title: cleanTitle,
+                        type: window.location.pathname.includes('spreadsheets') ? 'sheets' : window.location.pathname.includes('presentation') ? 'slides' : 'docs',
+                        url: href,
+                        exportUrl: 'https://docs.google.com/document/d/' + docId + '/export?format=docx'
+                    });
+                }
+            });
+            
+            if (scanned.length > 0 && window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.smartDocumentTracker) {
+                window.webkit.messageHandlers.smartDocumentTracker.postMessage({
+                    action: 'documentListScanned',
+                    documents: scanned
+                });
+            }
+        }
+        
+        setTimeout(scanHomeScreenDocuments, 2000);
+        setTimeout(scanHomeScreenDocuments, 5000);
+        
         // Notify host that Google Docs Offline open-source extension is ready
         try {
             window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.offlineExtensionReady &&

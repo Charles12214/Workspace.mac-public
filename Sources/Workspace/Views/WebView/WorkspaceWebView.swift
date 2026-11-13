@@ -379,6 +379,7 @@ public struct WebKitRepresentable: NSViewRepresentable {
             configuration.userContentController.addUserScript(GoogleDocsOfflineExtension.makeUserScript())
             configuration.userContentController.add(LeakAvoider(delegate: context.coordinator), name: "offlineExtensionReady")
             configuration.userContentController.add(LeakAvoider(delegate: context.coordinator), name: "smartDocumentTracker")
+            configuration.userContentController.add(LeakAvoider(delegate: context.coordinator), name: "offlineDocumentSaver")
             
             // Suppress browser upgrade banners, hide companion sidebar cleanly via CSS, and route window.print() to native print handler
             let customScript = """
@@ -431,9 +432,14 @@ public struct WebKitRepresentable: NSViewRepresentable {
         context.coordinator.setupObservers(for: wv)
         
         if isNew || wv.url == nil {
-            var request = URLRequest(url: url)
-            request.cachePolicy = OfflineManager.shared.isOffline ? .returnCacheDataElseLoad : .useProtocolCachePolicy
-            wv.load(request)
+            if OfflineManager.shared.isOffline {
+                let offlineHtml = GoogleWorkspaceOfflineEngine.html(for: app)
+                wv.loadHTMLString(offlineHtml, baseURL: app.url)
+            } else {
+                var request = URLRequest(url: url)
+                request.cachePolicy = .useProtocolCachePolicy
+                wv.load(request)
+            }
         }
         
         hostView.attach(webView: wv)
@@ -475,9 +481,14 @@ public struct WebKitRepresentable: NSViewRepresentable {
             }
             
             if wv.url == nil {
-                var request = URLRequest(url: url)
-                request.cachePolicy = OfflineManager.shared.isOffline ? .returnCacheDataElseLoad : .useProtocolCachePolicy
-                wv.load(request)
+                if OfflineManager.shared.isOffline {
+                    let offlineHtml = GoogleWorkspaceOfflineEngine.html(for: app)
+                    wv.loadHTMLString(offlineHtml, baseURL: app.url)
+                } else {
+                    var request = URLRequest(url: url)
+                    request.cachePolicy = .useProtocolCachePolicy
+                    wv.load(request)
+                }
             }
         }
     }
@@ -592,12 +603,9 @@ public struct WebKitRepresentable: NSViewRepresentable {
                nsError.code == NSURLErrorTimedOut ||
                OfflineManager.shared.isOffline {
                 
-                // When offline, instruct WebKit to load cached app bundle & IndexedDB offline files
-                if webView.url == nil || webView.url?.absoluteString == "about:blank" {
-                    var cachedRequest = URLRequest(url: parent.url)
-                    cachedRequest.cachePolicy = .returnCacheDataElseLoad
-                    webView.load(cachedRequest)
-                }
+                // Immediately serve the authentic Google Workspace Offline view
+                let offlineHtml = GoogleWorkspaceOfflineEngine.html(for: parent.app)
+                webView.loadHTMLString(offlineHtml, baseURL: parent.app.url)
                 parent.isOfflineError = true
             }
             parent.isLoading = false
@@ -700,6 +708,12 @@ public struct WebKitRepresentable: NSViewRepresentable {
                 if let dict = message.body as? [String: Any] {
                     Task { @MainActor in
                         OfflineManager.shared.handleTrackedDocumentMessage(dict)
+                    }
+                }
+            } else if message.name == "offlineDocumentSaver" {
+                if let dict = message.body as? [String: Any] {
+                    Task { @MainActor in
+                        OfflineManager.shared.handleOfflineDocumentSaverMessage(dict)
                     }
                 }
             }

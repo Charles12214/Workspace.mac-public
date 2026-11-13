@@ -111,6 +111,7 @@ public final class OfflineManager: ObservableObject {
             
             // Seed a welcome offline guide document
             seedWelcomeDocument()
+            seedUserWorkspaceDocuments()
         }
     }
     
@@ -130,6 +131,73 @@ public final class OfflineManager: ObservableObject {
             Workspace.mac • 100% Free & Open-Source
             """
             try? content.write(to: welcomePath, atomically: true, encoding: .utf8)
+        }
+    }
+    
+    private func seedUserWorkspaceDocuments() {
+        let musicBookPath = localDocumentsDirectory.appendingPathComponent("(NEW) Music tech book Y12.rtf")
+        if !FileManager.default.fileExists(atPath: musicBookPath.path) {
+            let content = """
+            Music Technology
+            
+            Charlie Cserfalvi-Smith
+            Y12
+            
+            ========================================
+            Document Sections & Syllabus:
+            
+            1. Heading & Overview
+            2. Music History
+               • Eras - Acoustic era
+               • Eras - Magnetic era
+               • Magnetic to digital shift
+            3. Audio Principles
+               • Wow & Flutter
+               • A/D conversion & digital audio
+               • MIDI
+               • Reverse Reverb
+            ========================================
+            """
+            let attrString = NSAttributedString(string: content, attributes: [
+                .font: NSFont.systemFont(ofSize: 15),
+                .foregroundColor: NSColor.textColor
+            ])
+            if let rtfData = try? attrString.data(from: NSRange(location: 0, length: attrString.length), documentAttributes: [.documentType: NSAttributedString.DocumentType.rtf]) {
+                try? rtfData.write(to: musicBookPath)
+            }
+        }
+        
+        // Seed recent tracked documents if none exist yet
+        if trackedDocuments.isEmpty {
+            let sampleTitles = [
+                "(NEW) Music tech book Y12",
+                "Methods of transmission 26",
+                "Network Hardware Worksheet",
+                "44 Data Collection User Interfaces Worksheet",
+                "42 Data Sources Worksheet",
+                "45 Moral and Ethical Issues Worksheet",
+                "41 Uses of Online Services Worksheet",
+                "33 Interacting with Online Communities Worksheet",
+                "35 External Threats to Data Worksheet",
+                "46 Legal Issues Worksheet",
+                "37 Impact of Data Threats Worksheet",
+                "43 Data Collection Methods Worksheet"
+            ]
+            let now = Date()
+            var seeded: [TrackedWorkspaceDocument] = []
+            for (idx, title) in sampleTitles.enumerated() {
+                seeded.append(TrackedWorkspaceDocument(
+                    id: "doc_tracked_\(idx)",
+                    title: title,
+                    type: "docs",
+                    url: "https://docs.google.com/document/",
+                    exportUrl: "",
+                    lastOpened: now.addingTimeInterval(Double(-idx * 3600)),
+                    localFilePath: title.contains("Music tech book") ? musicBookPath.path : nil
+                ))
+            }
+            self.trackedDocuments = seeded
+            persistTrackedDocuments()
         }
     }
     
@@ -237,6 +305,39 @@ public final class OfflineManager: ObservableObject {
     }
     
     public func handleTrackedDocumentMessage(_ dict: [String: Any]) {
+        let action = dict["action"] as? String ?? ""
+        
+        // Handle batch document list scanned from Google Docs home page
+        if action == "documentListScanned", let docs = dict["documents"] as? [[String: Any]] {
+            let now = Date()
+            for item in docs {
+                if let docId = item["docId"] as? String, !docId.isEmpty,
+                   let title = item["title"] as? String, !title.isEmpty {
+                    let type = item["type"] as? String ?? "docs"
+                    let url = item["url"] as? String ?? ""
+                    let exportUrl = item["exportUrl"] as? String ?? ""
+                    
+                    if let idx = trackedDocuments.firstIndex(where: { $0.id == docId }) {
+                        trackedDocuments[idx].title = title
+                        trackedDocuments[idx].url = url
+                        if !exportUrl.isEmpty { trackedDocuments[idx].exportUrl = exportUrl }
+                    } else {
+                        trackedDocuments.append(TrackedWorkspaceDocument(
+                            id: docId,
+                            title: title,
+                            type: type,
+                            url: url,
+                            exportUrl: exportUrl,
+                            lastOpened: now,
+                            localFilePath: nil
+                        ))
+                    }
+                }
+            }
+            persistTrackedDocuments()
+            return
+        }
+        
         guard let docId = dict["docId"] as? String, !docId.isEmpty,
               let title = dict["title"] as? String, !title.isEmpty else {
             return
@@ -267,6 +368,27 @@ public final class OfflineManager: ObservableObject {
         // Smart Downloader: automatically download and cache local offline copy into ~/Documents/Workspace.mac/
         if !exportUrl.isEmpty {
             smartDownloadDocument(docId: docId, title: title, type: type, exportUrlString: exportUrl)
+        }
+    }
+    
+    public func handleOfflineDocumentSaverMessage(_ dict: [String: Any]) {
+        _ = dict["action"] as? String ?? "save"
+        let title = (dict["title"] as? String ?? "Untitled").trimmingCharacters(in: .whitespacesAndNewlines)
+        let content = dict["content"] as? String ?? ""
+        
+        let invalidChars = CharacterSet(charactersIn: "/\\?%*|\"<>:")
+        var cleanTitle = title.components(separatedBy: invalidChars).joined(separator: "-").trimmingCharacters(in: .whitespacesAndNewlines)
+        if cleanTitle.isEmpty { cleanTitle = "Untitled Document" }
+        
+        let targetUrl = localDocumentsDirectory.appendingPathComponent("\(cleanTitle).rtf")
+        
+        let attrString = NSAttributedString(string: content, attributes: [
+            .font: NSFont.systemFont(ofSize: 15),
+            .foregroundColor: NSColor.textColor
+        ])
+        if let rtfData = try? attrString.data(from: NSRange(location: 0, length: attrString.length), documentAttributes: [.documentType: NSAttributedString.DocumentType.rtf]) {
+            try? rtfData.write(to: targetUrl)
+            scanLocalDocuments()
         }
     }
     
