@@ -43,12 +43,6 @@ if [ -d "Resources/Images" ]; then
     cp -r Resources/Images/* "${RESOURCES_DIR}/Images/"
 fi
 
-# Copy OfflineShells
-mkdir -p "${RESOURCES_DIR}/OfflineShells"
-if [ -d "Resources/OfflineShells" ]; then
-    cp -r Resources/OfflineShells/* "${RESOURCES_DIR}/OfflineShells/"
-fi
-
 # Copy Extensions
 mkdir -p "${RESOURCES_DIR}/Extensions"
 if [ -d "Extensions" ]; then

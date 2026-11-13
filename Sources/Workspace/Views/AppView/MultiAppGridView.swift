@@ -97,12 +97,12 @@ public struct MultiAppGridView: View {
             HStack(spacing: 8) {
                 ForEach(Array(apps.enumerated()), id: \.element.id) { index, item in
                     TiledAppPaneView(app: item, state: state, isSingleApp: false, paneIndex: index)
+                        .id(item.id)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(8)
-            .animation(.spring(response: 0.38, dampingFraction: 0.82), value: state.tiledAppIds)
             
         case 3:
             // 3 Apps: Master on Left (50%), 2 Stacked on Right (50% each)
@@ -123,7 +123,6 @@ public struct MultiAppGridView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .padding(8)
-            .animation(.spring(response: 0.4, dampingFraction: 0.82), value: state.tiledAppIds)
             
         case 4:
             // 4 Apps: 2x2 Quad Grid
@@ -151,7 +150,6 @@ public struct MultiAppGridView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .padding(8)
-            .animation(.spring(response: 0.4, dampingFraction: 0.82), value: state.tiledAppIds)
             
         default:
             EmptyView()
@@ -362,6 +360,7 @@ public struct TiledAppPaneView: View {
                 WebKitRepresentable(
                     url: state.overrideUrlForApp[app.id] ?? app.resolvedUrl(for: state.userProfile.email),
                     app: app,
+                    isTiled: !isSingleApp,
                     webViewOut: $webView,
                     canGoBack: $canGoBack,
                     canGoForward: $canGoForward,
@@ -423,7 +422,6 @@ public struct TiledAppPaneView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(nsColor: .windowBackgroundColor))
-        .cornerRadius(isSingleApp ? 0 : 12)
         .overlay(
             // Focus ring & subtle window border when in multi-app mode
             RoundedRectangle(cornerRadius: isSingleApp ? 0 : 12, style: .continuous)

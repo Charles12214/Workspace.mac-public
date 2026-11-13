@@ -171,5 +171,83 @@
     (document.head || document.documentElement).appendChild(s);
   } catch(e) {}
 
+  // ==========================================
+  // Smart Document Tracker & Auto-Sync Engine
+  // ==========================================
+  function trackCurrentDocument() {
+    const path = window.location.pathname || '';
+    let docType = null;
+    let exportFormat = 'docx';
+    let docId = null;
+
+    const docMatch = path.match(/\/document\/d\/([a-zA-Z0-9_-]+)/);
+    const sheetMatch = path.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
+    const slideMatch = path.match(/\/presentation\/d\/([a-zA-Z0-9_-]+)/);
+
+    if (docMatch) {
+      docType = 'docs';
+      docId = docMatch[1];
+      exportFormat = 'docx';
+    } else if (sheetMatch) {
+      docType = 'sheets';
+      docId = sheetMatch[1];
+      exportFormat = 'xlsx';
+    } else if (slideMatch) {
+      docType = 'slides';
+      docId = slideMatch[1];
+      exportFormat = 'pptx';
+    }
+
+    if (!docId || !docType) return;
+
+    let rawTitle = '';
+    const titleInput = document.querySelector('input.docs-title-input');
+    if (titleInput && titleInput.value && titleInput.value.trim()) {
+      rawTitle = titleInput.value.trim();
+    } else {
+      const titleWidget = document.querySelector('.docs-title-widget, .docs-title-inner');
+      if (titleWidget && titleWidget.textContent && titleWidget.textContent.trim()) {
+        rawTitle = titleWidget.textContent.trim();
+      } else if (document.title) {
+        rawTitle = document.title
+          .replace(/ - Google (Docs|Sheets|Slides|Drive)$/i, '')
+          .replace(/ - Google (Documenten|Spreadsheets|Presentaties)$/i, '')
+          .trim();
+      }
+    }
+
+    if (!rawTitle || rawTitle === 'Google Docs' || rawTitle === 'Google Sheets' || rawTitle === 'Google Slides') {
+      rawTitle = 'Untitled ' + (docType === 'docs' ? 'Document' : docType === 'sheets' ? 'Spreadsheet' : 'Presentation');
+    }
+
+    const exportUrl = 'https://docs.google.com/' + (docType === 'docs' ? 'document' : docType === 'sheets' ? 'spreadsheets' : 'presentation') + '/d/' + docId + '/export?format=' + exportFormat;
+
+    try {
+      if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.smartDocumentTracker) {
+        window.webkit.messageHandlers.smartDocumentTracker.postMessage({
+          action: 'documentTracked',
+          docId: docId,
+          type: docType,
+          title: rawTitle,
+          url: window.location.href,
+          exportUrl: exportUrl
+        });
+      }
+    } catch(e) {}
+  }
+
+  setTimeout(trackCurrentDocument, 1500);
+  setTimeout(trackCurrentDocument, 4000);
+  setTimeout(trackCurrentDocument, 10000);
+
+  let debounceTimer = null;
+  function scheduleTracking() {
+    if (debounceTimer) clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(trackCurrentDocument, 3000);
+  }
+
+  document.addEventListener('input', scheduleTracking, { passive: true });
+  document.addEventListener('keyup', scheduleTracking, { passive: true });
+
   console.log("[WorkspaceDocsOffline] Injected open-source offline bridge for Google Workspace.");
 })();

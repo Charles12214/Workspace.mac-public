@@ -228,6 +228,7 @@ public struct WorkspaceWebView: View {
 @MainActor
 public final class WebKitHostView: NSView {
     public private(set) weak var currentWebView: WKWebView?
+    private var isTiledPane: Bool = false
     
     public override init(frame: NSRect) {
         super.init(frame: frame)
@@ -237,6 +238,13 @@ public final class WebKitHostView: NSView {
     
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+    
+    public func setTiled(_ tiled: Bool) {
+        self.isTiledPane = tiled
+        self.wantsLayer = true
+        self.layer?.cornerRadius = tiled ? 12 : 0
+        self.layer?.masksToBounds = true
     }
     
     public func attach(webView: WKWebView) {
@@ -259,15 +267,14 @@ public final class WebKitHostView: NSView {
         }
         
         self.currentWebView = webView
-        if self.bounds.width > 0 && self.bounds.height > 0 {
-            webView.frame = self.bounds
-        } else {
-            webView.frame = NSRect(x: 0, y: 0, width: 800, height: 600)
-        }
+        let targetFrame = (self.bounds.width > 0 && self.bounds.height > 0) ? self.bounds : NSRect(x: 0, y: 0, width: 800, height: 600)
+        webView.frame = targetFrame
         webView.autoresizingMask = [.width, .height]
         webView.isHidden = false
         self.addSubview(webView)
         self.needsLayout = true
+        webView.needsLayout = true
+        webView.needsDisplay = true
     }
     
     public override func setFrameSize(_ newSize: NSSize) {
@@ -287,6 +294,9 @@ public final class WebKitHostView: NSView {
     public override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         if let wv = currentWebView, window != nil {
+            if wv.superview !== self {
+                self.addSubview(wv)
+            }
             if self.bounds.width > 0 && self.bounds.height > 0 {
                 wv.frame = self.bounds
             }
@@ -312,6 +322,7 @@ public final class WebKitHostView: NSView {
 public struct WebKitRepresentable: NSViewRepresentable {
     public let url: URL
     public let app: WorkspaceAppItem
+    public let isTiled: Bool
     @Binding public var webViewOut: WKWebView?
     @Binding public var canGoBack: Bool
     @Binding public var canGoForward: Bool
@@ -323,6 +334,7 @@ public struct WebKitRepresentable: NSViewRepresentable {
     public init(
         url: URL,
         app: WorkspaceAppItem,
+        isTiled: Bool = false,
         webViewOut: Binding<WKWebView?>,
         canGoBack: Binding<Bool>,
         canGoForward: Binding<Bool>,
@@ -333,6 +345,7 @@ public struct WebKitRepresentable: NSViewRepresentable {
     ) {
         self.url = url
         self.app = app
+        self.isTiled = isTiled
         self._webViewOut = webViewOut
         self._canGoBack = canGoBack
         self._canGoForward = canGoForward
@@ -348,6 +361,7 @@ public struct WebKitRepresentable: NSViewRepresentable {
     
     public func makeNSView(context: Context) -> WebKitHostView {
         let hostView = WebKitHostView(frame: NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1400, height: 900))
+        hostView.setTiled(isTiled)
         
         let (wv, isNew) = WebKitPool.shared.getOrCreateWebView(
             appId: app.id,
@@ -358,12 +372,13 @@ public struct WebKitRepresentable: NSViewRepresentable {
             configuration.preferences.setValue(true, forKey: "developerExtrasEnabled")
             configuration.suppressesIncrementalRendering = false
             
-            // Match exact native Safari 27.2 User-Agent on macOS for crisp Retina canvas rendering in Google Docs & Sheets
-            configuration.applicationNameForUserAgent = "Version/27.2 Safari/605.1.15"
+            // Mask User-Agent as Chrome on macOS for Google Workspace offline engine compatibility
+            configuration.applicationNameForUserAgent = "Chrome/131.0.0.0 Safari/537.36"
             
             // Inject official Google Docs Offline Chrome Extension Polyfill / Shim
             configuration.userContentController.addUserScript(GoogleDocsOfflineExtension.makeUserScript())
             configuration.userContentController.add(LeakAvoider(delegate: context.coordinator), name: "offlineExtensionReady")
+            configuration.userContentController.add(LeakAvoider(delegate: context.coordinator), name: "smartDocumentTracker")
             
             // Suppress browser upgrade banners, hide companion sidebar cleanly via CSS, and route window.print() to native print handler
             let customScript = """
@@ -405,6 +420,9 @@ public struct WebKitRepresentable: NSViewRepresentable {
             newWv.allowsMagnification = true
             newWv.pageZoom = 1.0
             newWv.magnification = 1.0
+            
+            // Mask User-Agent as Chrome on macOS for Google Docs, Sheets & Slides native offline engine
+            newWv.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
             return newWv
         }
         
@@ -413,14 +431,9 @@ public struct WebKitRepresentable: NSViewRepresentable {
         context.coordinator.setupObservers(for: wv)
         
         if isNew || wv.url == nil {
-            if OfflineManager.shared.isOffline {
-                let shell = GoogleWorkspaceOfflineShell.html(for: app, userName: AppState.shared.userProfile.name, userEmail: AppState.shared.userProfile.email)
-                wv.loadHTMLString(shell, baseURL: app.url)
-            } else {
-                var request = URLRequest(url: url)
-                request.cachePolicy = .useProtocolCachePolicy
-                wv.load(request)
-            }
+            var request = URLRequest(url: url)
+            request.cachePolicy = OfflineManager.shared.isOffline ? .returnCacheDataElseLoad : .useProtocolCachePolicy
+            wv.load(request)
         }
         
         hostView.attach(webView: wv)
@@ -445,6 +458,7 @@ public struct WebKitRepresentable: NSViewRepresentable {
     }
     
     public func updateNSView(_ hostView: WebKitHostView, context: Context) {
+        hostView.setTiled(isTiled)
         if let wv = WebKitPool.shared.getWebView(appId: app.id, accountId: AppState.shared.activeAccountId) {
             hostView.attach(webView: wv)
             if hostView.bounds.width > 0 && hostView.bounds.height > 0 {
@@ -461,14 +475,9 @@ public struct WebKitRepresentable: NSViewRepresentable {
             }
             
             if wv.url == nil {
-                if OfflineManager.shared.isOffline {
-                    let shell = GoogleWorkspaceOfflineShell.html(for: app, userName: AppState.shared.userProfile.name, userEmail: AppState.shared.userProfile.email)
-                    wv.loadHTMLString(shell, baseURL: app.url)
-                } else {
-                    var request = URLRequest(url: url)
-                    request.cachePolicy = .useProtocolCachePolicy
-                    wv.load(request)
-                }
+                var request = URLRequest(url: url)
+                request.cachePolicy = OfflineManager.shared.isOffline ? .returnCacheDataElseLoad : .useProtocolCachePolicy
+                wv.load(request)
             }
         }
     }
@@ -583,13 +592,12 @@ public struct WebKitRepresentable: NSViewRepresentable {
                nsError.code == NSURLErrorTimedOut ||
                OfflineManager.shared.isOffline {
                 
-                // Immediately serve the Google Workspace Offline App Shell so the page renders the real offline UI
-                let shell = GoogleWorkspaceOfflineShell.html(
-                    for: parent.app,
-                    userName: AppState.shared.userProfile.name,
-                    userEmail: AppState.shared.userProfile.email
-                )
-                webView.loadHTMLString(shell, baseURL: parent.app.url)
+                // When offline, instruct WebKit to load cached app bundle & IndexedDB offline files
+                if webView.url == nil || webView.url?.absoluteString == "about:blank" {
+                    var cachedRequest = URLRequest(url: parent.url)
+                    cachedRequest.cachePolicy = .returnCacheDataElseLoad
+                    webView.load(cachedRequest)
+                }
                 parent.isOfflineError = true
             }
             parent.isLoading = false
@@ -688,6 +696,12 @@ public struct WebKitRepresentable: NSViewRepresentable {
                 }
             } else if message.name == "offlineExtensionReady" {
                 // Google Docs Offline Extension Shim active and ready
+            } else if message.name == "smartDocumentTracker" {
+                if let dict = message.body as? [String: Any] {
+                    Task { @MainActor in
+                        OfflineManager.shared.handleTrackedDocumentMessage(dict)
+                    }
+                }
             }
         }
     }

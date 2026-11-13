@@ -3,6 +3,34 @@ import Network
 import Combine
 import AppKit
 import SwiftUI
+import WebKit
+
+// MARK: - Tracked Workspace Document Model (Smart Document Tracker)
+public struct TrackedWorkspaceDocument: Identifiable, Codable, Equatable, Sendable {
+    public var id: String // Google Doc/Sheet/Slide ID
+    public var title: String
+    public var type: String // "docs", "sheets", "slides", "drive"
+    public var url: String
+    public var exportUrl: String
+    public var lastOpened: Date
+    public var localFilePath: String?
+    
+    public var fileExtension: String {
+        switch type {
+        case "sheets": return "xlsx"
+        case "slides": return "pptx"
+        default: return "docx"
+        }
+    }
+    
+    public var iconSymbol: String {
+        switch type {
+        case "sheets": return "tablecells.fill"
+        case "slides": return "play.rectangle.fill"
+        default: return "doc.text.fill"
+        }
+    }
+}
 
 // MARK: - Local Workspace Document Model
 public struct LocalWorkspaceDocument: Identifiable, Hashable, Sendable {
@@ -46,6 +74,7 @@ public final class OfflineManager: ObservableObject {
     @Published public var isOffline: Bool = false
     @Published public var connectionType: String = "Wi-Fi"
     @Published public var localDocuments: [LocalWorkspaceDocument] = []
+    @Published public var trackedDocuments: [TrackedWorkspaceDocument] = []
     
     // Cloud sync popup state
     @Published public var isSyncingToCloud: Bool = false
@@ -55,6 +84,10 @@ public final class OfflineManager: ObservableObject {
     // Directory: ~/Documents/Workspace.mac/
     public let localDocumentsDirectory: URL
     
+    private let kTrackedDocsKey = "Workspace_TrackedDocuments_V1"
+    private var activeDownloadIds: Set<String> = []
+    private var lastDownloadTimes: [String: Date] = [:]
+    
     private var lastWasOffline: Bool = false
     
     public init() {
@@ -62,6 +95,7 @@ public final class OfflineManager: ObservableObject {
         self.localDocumentsDirectory = docs.appendingPathComponent("Workspace.mac", isDirectory: true)
         
         ensureDirectoryExists()
+        loadTrackedDocuments()
         startMonitoring()
         scanLocalDocuments()
     }
@@ -186,6 +220,117 @@ public final class OfflineManager: ObservableObject {
         
         // Sort descending by modification date
         self.localDocuments = docs.sorted(by: { $0.modificationDate > $1.modificationDate })
+    }
+    
+    // MARK: - Smart Document Tracker & Auto-Sync Downloader
+    private func loadTrackedDocuments() {
+        if let data = UserDefaults.standard.data(forKey: kTrackedDocsKey),
+           let list = try? JSONDecoder().decode([TrackedWorkspaceDocument].self, from: data) {
+            self.trackedDocuments = list
+        }
+    }
+    
+    public func persistTrackedDocuments() {
+        if let data = try? JSONEncoder().encode(trackedDocuments) {
+            UserDefaults.standard.set(data, forKey: kTrackedDocsKey)
+        }
+    }
+    
+    public func handleTrackedDocumentMessage(_ dict: [String: Any]) {
+        guard let docId = dict["docId"] as? String, !docId.isEmpty,
+              let title = dict["title"] as? String, !title.isEmpty else {
+            return
+        }
+        let type = dict["type"] as? String ?? "docs"
+        let url = dict["url"] as? String ?? ""
+        let exportUrl = dict["exportUrl"] as? String ?? ""
+        
+        let now = Date()
+        if let idx = trackedDocuments.firstIndex(where: { $0.id == docId }) {
+            trackedDocuments[idx].title = title
+            trackedDocuments[idx].url = url
+            trackedDocuments[idx].exportUrl = exportUrl
+            trackedDocuments[idx].lastOpened = now
+        } else {
+            trackedDocuments.append(TrackedWorkspaceDocument(
+                id: docId,
+                title: title,
+                type: type,
+                url: url,
+                exportUrl: exportUrl,
+                lastOpened: now,
+                localFilePath: nil
+            ))
+        }
+        persistTrackedDocuments()
+        
+        // Smart Downloader: automatically download and cache local offline copy into ~/Documents/Workspace.mac/
+        if !exportUrl.isEmpty {
+            smartDownloadDocument(docId: docId, title: title, type: type, exportUrlString: exportUrl)
+        }
+    }
+    
+    public func smartDownloadDocument(docId: String, title: String, type: String, exportUrlString: String) {
+        guard let exportUrl = URL(string: exportUrlString) else { return }
+        
+        // Debounce downloads to avoid hitting Google servers repeatedly while the user is actively typing
+        if let last = lastDownloadTimes[docId], Date().timeIntervalSince(last) < 15 {
+            return
+        }
+        guard !activeDownloadIds.contains(docId) else { return }
+        activeDownloadIds.insert(docId)
+        lastDownloadTimes[docId] = Date()
+        
+        Task { [weak self] in
+            guard let self = self else { return }
+            defer {
+                Task { @MainActor [weak self] in
+                    self?.activeDownloadIds.remove(docId)
+                }
+            }
+            
+            // Extract active session cookies from WKWebsiteDataStore
+            let cookies = await AppState.shared.activeDataStore.httpCookieStore.allCookies()
+            var request = URLRequest(url: exportUrl)
+            let headers = HTTPCookie.requestHeaderFields(with: cookies)
+            for (header, val) in headers {
+                request.setValue(val, forHTTPHeaderField: header)
+            }
+            request.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36", forHTTPHeaderField: "User-Agent")
+            request.timeoutInterval = 30
+            
+            do {
+                let (data, response) = try await URLSession.shared.data(for: request)
+                guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200, data.count > 100 else {
+                    return
+                }
+                
+                // Sanitize file name for macOS filesystem
+                let invalidChars = CharacterSet(charactersIn: "/\\?%*|\"<>:")
+                var cleanTitle = title.components(separatedBy: invalidChars).joined(separator: "-").trimmingCharacters(in: .whitespacesAndNewlines)
+                if cleanTitle.isEmpty { cleanTitle = "Untitled Document" }
+                
+                var ext = "docx"
+                switch type {
+                case "sheets": ext = "xlsx"
+                case "slides": ext = "pptx"
+                default: ext = "docx"
+                }
+                
+                let targetUrl = self.localDocumentsDirectory.appendingPathComponent("\(cleanTitle).\(ext)")
+                try data.write(to: targetUrl, options: .atomic)
+                
+                await MainActor.run {
+                    if let idx = self.trackedDocuments.firstIndex(where: { $0.id == docId }) {
+                        self.trackedDocuments[idx].localFilePath = targetUrl.path
+                        self.persistTrackedDocuments()
+                    }
+                    self.scanLocalDocuments()
+                }
+            } catch {
+                // Silently ignore network export failures when offline
+            }
+        }
     }
     
     public func createNewLocalDocument(title: String, initialContent: String = "") -> URL? {
