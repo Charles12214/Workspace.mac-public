@@ -22,27 +22,63 @@ public struct WorkspaceWebView: View {
     
     public var body: some View {
         ZStack(alignment: .topLeading) {
-            // MARK: - Native Offline Document Hub or Edge-to-Edge Embedded WebKit View
-            if isOfflineError || (OfflineManager.shared.isOffline && (webView?.url == nil || currentUrlString.isEmpty)) {
-                OfflineDocumentHubView(app: app) {
-                    isOfflineError = false
-                    if let wv = webView {
-                        wv.reload()
+            // MARK: - Edge-to-Edge Embedded WebKit View with Custom Open-Source Offline Extension
+            WebKitRepresentable(
+                url: app.url,
+                app: app,
+                webViewOut: $webView,
+                canGoBack: $canGoBack,
+                canGoForward: $canGoForward,
+                isLoading: $isLoading,
+                currentUrlString: $currentUrlString,
+                pageTitle: $pageTitle,
+                isOfflineError: $isOfflineError
+            )
+            .ignoresSafeArea()
+            
+            // MARK: - Ambient Offline Status Pill
+            if OfflineManager.shared.isOffline {
+                VStack {
+                    HStack(spacing: 8) {
+                        Image(systemName: "wifi.slash")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(Color(hex: "F59E0B"))
+                        
+                        Text("Offline • Workspace Docs Offline Extension Active")
+                            .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.primary)
+                        
+                        Spacer()
+                        
+                        Button(action: {
+                            webView?.reload()
+                        }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "arrow.clockwise")
+                                    .font(.system(size: 10, weight: .bold))
+                                Text("Retry")
+                                    .font(.system(size: 11, weight: .semibold))
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(Capsule().fill(Color.primary.opacity(0.08)))
+                        }
+                        .buttonStyle(.plain)
                     }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 6)
+                    .background(.ultraThinMaterial)
+                    .clipShape(Capsule())
+                    .overlay(Capsule().stroke(Color(hex: "F59E0B").opacity(0.35), lineWidth: 1))
+                    .shadow(color: Color.black.opacity(0.18), radius: 8, y: 3)
+                    .padding(.top, 10)
+                    .frame(maxWidth: 420)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    
+                    Spacer()
                 }
-            } else {
-                WebKitRepresentable(
-                    url: app.url,
-                    app: app,
-                    webViewOut: $webView,
-                    canGoBack: $canGoBack,
-                    canGoForward: $canGoForward,
-                    isLoading: $isLoading,
-                    currentUrlString: $currentUrlString,
-                    pageTitle: $pageTitle,
-                    isOfflineError: $isOfflineError
-                )
-                .ignoresSafeArea()
+                .frame(maxWidth: .infinity)
+                .zIndex(15)
             }
             
             // MARK: - Top Windowed-Fullscreen Zoom Trigger Zone (Double click top edge to enlarge)
@@ -337,7 +373,7 @@ public struct WebKitRepresentable: NSViewRepresentable {
         
         if isNew || wv.url == nil {
             var request = URLRequest(url: url)
-            request.cachePolicy = .useProtocolCachePolicy
+            request.cachePolicy = OfflineManager.shared.isOffline ? .returnCacheDataElseLoad : .useProtocolCachePolicy
             wv.load(request)
         }
         
@@ -380,7 +416,7 @@ public struct WebKitRepresentable: NSViewRepresentable {
             
             if wv.url == nil {
                 var request = URLRequest(url: url)
-                request.cachePolicy = .useProtocolCachePolicy
+                request.cachePolicy = OfflineManager.shared.isOffline ? .returnCacheDataElseLoad : .useProtocolCachePolicy
                 wv.load(request)
             }
         }
@@ -495,6 +531,13 @@ public struct WebKitRepresentable: NSViewRepresentable {
                nsError.code == NSURLErrorNetworkConnectionLost ||
                nsError.code == NSURLErrorTimedOut ||
                OfflineManager.shared.isOffline {
+                
+                // Fall back to WebKit's persistent offline cache so Google Docs offline shell loads
+                if let currentUrl = webView.url ?? parent.url as URL? {
+                    var cachedReq = URLRequest(url: currentUrl)
+                    cachedReq.cachePolicy = .returnCacheDataElseLoad
+                    webView.load(cachedReq)
+                }
                 parent.isOfflineError = true
             }
             parent.isLoading = false

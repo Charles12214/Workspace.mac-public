@@ -45,8 +45,6 @@ public final class OfflineManager: ObservableObject {
     @Published public var isOffline: Bool = false
     @Published public var connectionType: String = "Wi-Fi"
     @Published public var localDocuments: [LocalWorkspaceDocument] = []
-    @Published public var showingLocalEditor: Bool = false
-    @Published public var editingDocumentURL: URL? = nil
     
     // Directory: ~/Documents/Workspace.mac/
     public let localDocumentsDirectory: URL
@@ -184,10 +182,5 @@ public final class OfflineManager: ObservableObject {
     
     public func openDocumentExternally(url: URL) {
         NSWorkspace.shared.open(url)
-    }
-    
-    public func launchLocalEditor(for documentUrl: URL? = nil) {
-        self.editingDocumentURL = documentUrl
-        self.showingLocalEditor = true
     }
 }

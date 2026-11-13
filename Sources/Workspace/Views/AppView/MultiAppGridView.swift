@@ -357,33 +357,41 @@ public struct TiledAppPaneView: View {
                 paneHeaderView
             }
             
-            // WebKit WebView Container or Native Offline Document Hub
+            // WebKit WebView Container with Custom Open-Source Offline Extension
             ZStack(alignment: .top) {
-                if isOfflineError || (OfflineManager.shared.isOffline && (webView?.url == nil || currentUrlString.isEmpty)) {
-                    OfflineDocumentHubView(app: app) {
-                        isOfflineError = false
-                        if let wv = webView {
-                            wv.reload()
-                        }
+                WebKitRepresentable(
+                    url: state.overrideUrlForApp[app.id] ?? app.resolvedUrl(for: state.userProfile.email),
+                    app: app,
+                    webViewOut: $webView,
+                    canGoBack: $canGoBack,
+                    canGoForward: $canGoForward,
+                    isLoading: $isLoading,
+                    currentUrlString: $currentUrlString,
+                    pageTitle: $pageTitle,
+                    isOfflineError: $isOfflineError
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                
+                // Ambient Offline Indicator in multi-pane
+                if OfflineManager.shared.isOffline {
+                    HStack(spacing: 5) {
+                        Image(systemName: "wifi.slash")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(Color(hex: "F59E0B"))
+                        Text("Offline Extension Active")
+                            .font(.system(size: 9.5, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.secondary)
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    WebKitRepresentable(
-                        url: state.overrideUrlForApp[app.id] ?? app.resolvedUrl(for: state.userProfile.email),
-                        app: app,
-                        webViewOut: $webView,
-                        canGoBack: $canGoBack,
-                        canGoForward: $canGoForward,
-                        isLoading: $isLoading,
-                        currentUrlString: $currentUrlString,
-                        pageTitle: $pageTitle,
-                        isOfflineError: $isOfflineError
-                    )
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(.ultraThinMaterial)
+                    .clipShape(Capsule())
+                    .overlay(Capsule().stroke(Color(hex: "F59E0B").opacity(0.3), lineWidth: 1))
+                    .padding(.top, 6)
                 }
                 
                 // Loading line
-                if isLoading && !isOfflineError && !OfflineManager.shared.isOffline {
+                if isLoading && !OfflineManager.shared.isOffline {
                     ProgressView()
                         .progressViewStyle(.linear)
                         .frame(height: 2)

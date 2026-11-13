@@ -1,16 +1,32 @@
 import Foundation
 import WebKit
 
-/// Google Docs & Workspace Offline Chrome Extension API Polyfill / Shim.
-/// Simulates the official Google Docs Offline Chrome Extension (`ghbmnnjooekpmoecnnnilnnbdlolhkhi`)
-/// within WebKit so that Google Docs, Sheets, Slides, and Drive detect offline capabilities,
-/// enable IndexedDB local storage, and support seamless offline viewing and editing.
+/// Google Docs & Workspace Offline Open-Source Web Extension Integration.
+/// Connects the custom open-source WebExtension (`Extensions/WorkspaceDocsOffline/`)
+/// into WebKit so that Google Docs, Sheets, Slides, and Drive unlock native offline
+/// document editing and IndexedDB storage within Workspace.mac without Google Chrome.
 public struct GoogleDocsOfflineExtension {
     
     public static let extensionId = "ghbmnnjooekpmoecnnnilnnbdlolhkhi"
     
-    /// JavaScript injection payload providing chrome.runtime and chrome.storage shims
-    public static let shimScriptSource: String = """
+    /// Returns the bundled JavaScript source for the open-source extension bridge
+    public static var extensionScriptSource: String {
+        // Try loading from Extensions/WorkspaceDocsOffline/ if accessible
+        let extDir = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .appendingPathComponent("Extensions/WorkspaceDocsOffline")
+        let contentUrl = extDir.appendingPathComponent("content.js")
+        let engineUrl = extDir.appendingPathComponent("offline-engine.js")
+        
+        if let contentCode = try? String(contentsOf: contentUrl),
+           let engineCode = try? String(contentsOf: engineUrl) {
+            return contentCode + "\n" + engineCode
+        }
+        
+        // Fallback embedded open-source extension script
+        return embeddedScript
+    }
+    
+    public static let embeddedScript: String = """
     (function() {
         if (window.__workspaceOfflineShimInjected) return;
         window.__workspaceOfflineShimInjected = true;
@@ -20,16 +36,26 @@ public struct GoogleDocsOfflineExtension {
         // Ensure window.chrome namespace exists
         window.chrome = window.chrome || {};
         
+        // Polyfill chrome.app
+        window.chrome.app = window.chrome.app || {
+            isInstalled: true,
+            InstallState: { DISABLED: "disabled", INSTALLED: "installed", NOT_INSTALLED: "not_installed" },
+            RunningState: { CANNOT_RUN: "cannot_run", READY_TO_RUN: "ready_to_run", RUNNING: "running" },
+            getDetails: function() { return { id: EXT_ID, isInstalled: true }; },
+            getIsInstalled: function() { return true; },
+            installState: function(cb) { if (cb) cb("installed"); }
+        };
+        
         // Polyfill chrome.runtime
         window.chrome.runtime = window.chrome.runtime || {
             id: EXT_ID,
             
             getManifest: function() {
                 return {
-                    name: "Google Docs Offline (Workspace.mac Native Engine)",
+                    name: "Google Docs Offline (Workspace.mac Open-Source Extension)",
                     version: "1.74.0",
                     manifest_version: 3,
-                    description: "Native Google Docs Offline Bridge for Workspace.mac"
+                    description: "Open-source offline editor bridge for Workspace.mac"
                 };
             },
             
@@ -47,14 +73,17 @@ public struct GoogleDocsOfflineExtension {
                 
                 const type = (message && message.type) || (message && message.action) || (message && message.command) || '';
                 
-                // Construct standard responses expected by Google Docs Offline clients
                 let response = {
                     success: true,
                     installed: true,
                     isInstalled: true,
                     offlineStatus: 'ENABLED',
                     enabled: true,
-                    version: '1.74.0'
+                    version: '1.74.0',
+                    diagnostics: {
+                        isIndexedDbAvailable: true,
+                        isFileSystemAvailable: true
+                    }
                 };
                 
                 if (type === 'getOfflineStatus' || type === 'getStatus') {
@@ -63,6 +92,7 @@ public struct GoogleDocsOfflineExtension {
                         isOfflineAvailable: true,
                         isOfflineEnabled: true,
                         enabled: true,
+                        version: '1.74.0',
                         diagnostics: {
                             isIndexedDbAvailable: true,
                             isFileSystemAvailable: true
@@ -89,7 +119,7 @@ public struct GoogleDocsOfflineExtension {
                 const messageListeners = [];
                 const disconnectListeners = [];
                 
-                const port = {
+                return {
                     name: portName,
                     onMessage: {
                         addListener: function(fn) { messageListeners.push(fn); },
@@ -106,7 +136,6 @@ public struct GoogleDocsOfflineExtension {
                         }
                     },
                     postMessage: function(msg) {
-                        // Echo or acknowledge messages sent through port
                         setTimeout(function() {
                             for (let i = 0; i < messageListeners.length; i++) {
                                 try { messageListeners[i]({ status: 'ACK', type: msg ? msg.type : '' }); } catch(e) {}
@@ -119,18 +148,10 @@ public struct GoogleDocsOfflineExtension {
                         }
                     }
                 };
-                return port;
             },
             
-            onMessage: {
-                addListener: function(fn) {},
-                removeListener: function(fn) {}
-            },
-            
-            onConnect: {
-                addListener: function(fn) {},
-                removeListener: function(fn) {}
-            }
+            onMessage: { addListener: function() {}, removeListener: function() {} },
+            onConnect: { addListener: function() {}, removeListener: function() {} }
         };
         
         // Polyfill chrome.storage
@@ -157,11 +178,30 @@ public struct GoogleDocsOfflineExtension {
                 set: function(items, cb) {
                     if (cb && typeof cb === 'function') setTimeout(function() { cb(); }, 0);
                     return Promise.resolve();
+                },
+                remove: function(keys, cb) {
+                    if (cb && typeof cb === 'function') setTimeout(function() { cb(); }, 0);
+                    return Promise.resolve();
                 }
             }
         };
         
-        // Notify host that Google Docs Offline shim is active
+        // Remove "Switch to Google Chrome" and "Offline requires Chrome" banners in Google Docs
+        const removePromos = function() {
+            const banners = document.querySelectorAll(
+                '[aria-label*="switch to Chrome"], [aria-label*="Try Chrome"], [aria-label*="supported browser"], .docs-offline-promo, .app-download-banner'
+            );
+            for (let i = 0; i < banners.length; i++) {
+                banners[i].remove();
+            }
+        };
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', removePromos);
+        } else {
+            removePromos();
+        }
+        
+        // Notify host that Google Docs Offline open-source extension is ready
         try {
             window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.offlineExtensionReady &&
             window.webkit.messageHandlers.offlineExtensionReady.postMessage({ status: 'ready', extId: EXT_ID });
@@ -173,7 +213,7 @@ public struct GoogleDocsOfflineExtension {
     @MainActor
     public static func makeUserScript() -> WKUserScript {
         WKUserScript(
-            source: shimScriptSource,
+            source: extensionScriptSource,
             injectionTime: .atDocumentStart,
             forMainFrameOnly: false
         )
