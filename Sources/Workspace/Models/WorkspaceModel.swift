@@ -307,6 +307,29 @@ public struct UserProfile: Codable, Equatable, Sendable, Identifiable {
     )
 }
 
+// MARK: - Workspace Multi-Window Group
+public struct WorkspaceGroup: Identifiable, Codable, Hashable, Sendable {
+    public let id: String
+    public var name: String
+    public var appIds: [String]
+    public var createdAt: Date
+    public var updatedAt: Date
+    
+    public init(
+        id: String = UUID().uuidString,
+        name: String,
+        appIds: [String],
+        createdAt: Date = Date(),
+        updatedAt: Date = Date()
+    ) {
+        self.id = id
+        self.name = name
+        self.appIds = appIds
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+}
+
 // MARK: - Appearance Mode
 public enum AppearanceMode: String, CaseIterable, Codable, Identifiable, Sendable {
     case light = "Light"

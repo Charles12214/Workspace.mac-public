@@ -36,12 +36,25 @@ public final class AppState: ObservableObject {
     @Published public var activeAccountId: String = ""
     @Published public var isAddingNewAccount: Bool = false
     
-    // MARK: - Multitasking Tiling State (Up to 4 Apps)
+    // MARK: - Multitasking Tiling State (Up to 4 Apps) & Groups
     private let kHasSeenMultitaskingWarningKey = "Workspace_HasSeenMultitaskingWarning"
+    private let kSavedGroupsKey = "Workspace_SavedGroups_V1"
+    
     @Published public var tiledAppIds: [String] = []
     @Published public var focusedTiledAppId: String? = nil
     @Published public var showingMultitaskingWarning: Bool = false
     public var pendingTiledAppToAdd: WorkspaceAppItem? = nil
+    
+    // Groups System
+    @Published public var savedGroups: [WorkspaceGroup] = []
+    @Published public var activeGroupId: String? = nil
+    @Published public var activeGroupName: String = "Unsaved Group"
+    
+    // Group Modal Triggers
+    @Published public var showingSaveGroupModal: Bool = false
+    @Published public var showingRenameGroupModal: Bool = false
+    @Published public var groupModalInputName: String = ""
+    @Published public var groupModalTargetId: String? = nil
     
     public var activeAccount: UserProfile {
         if let acc = accounts.first(where: { $0.accountId == activeAccountId }) {
@@ -323,6 +336,14 @@ public final class AppState: ObservableObject {
                     self.applyAppearanceToWindow()
                 }
             }
+        }
+        
+        // Load Saved Groups
+        if let data = UserDefaults.standard.data(forKey: kSavedGroupsKey),
+           let groups = try? JSONDecoder().decode([WorkspaceGroup].self, from: data) {
+            self.savedGroups = groups
+        } else {
+            self.savedGroups = []
         }
         
         applyAppearanceToWindow()
@@ -662,6 +683,11 @@ public final class AppState: ObservableObject {
             persistAppData()
         }
         
+        // Ensure minimalist mode is disabled if entering multitasking
+        if appViewMode == .minimalist {
+            appViewMode = .essentials
+        }
+        
         withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
             if tiledAppIds.isEmpty, let cur = selectedAppId {
                 tiledAppIds = [cur]
@@ -700,6 +726,13 @@ public final class AppState: ObservableObject {
             if tiledAppIds.isEmpty {
                 selectedAppId = nil
                 focusedTiledAppId = nil
+                activeGroupId = nil
+                activeGroupName = "Unsaved Group"
+            } else if tiledAppIds.count == 1 {
+                selectedAppId = tiledAppIds.first
+                focusedTiledAppId = tiledAppIds.first
+                activeGroupId = nil
+                activeGroupName = "Unsaved Group"
             } else {
                 selectedAppId = tiledAppIds.first
                 if focusedTiledAppId == id {
@@ -729,6 +762,8 @@ public final class AppState: ObservableObject {
             tiledAppIds = [id]
             selectedAppId = id
             focusedTiledAppId = id
+            activeGroupId = nil
+            activeGroupName = "Unsaved Group"
         }
     }
     
@@ -835,9 +870,125 @@ public final class AppState: ObservableObject {
     public func goHome() {
         withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
             selectedAppId = nil
+            focusedTiledAppId = nil
+            if tiledAppIds.count <= 1 {
+                tiledAppIds = []
+            }
+        }
+    }
+    
+    // MARK: - Groups Persistence & Actions
+    public func persistSavedGroups() {
+        if let data = try? JSONEncoder().encode(savedGroups) {
+            UserDefaults.standard.set(data, forKey: kSavedGroupsKey)
+        }
+    }
+    
+    public func suggestedGroupName(for appIds: [String]) -> String {
+        let names = appIds.compactMap { id in apps.first(where: { $0.id == id })?.name }
+        if names.isEmpty { return "Group \(savedGroups.count + 1)" }
+        return names.joined(separator: " & ")
+    }
+    
+    public func triggerSaveGroup() {
+        guard isMultitaskingActive else { return }
+        if let currentId = activeGroupId, let idx = savedGroups.firstIndex(where: { $0.id == currentId }) {
+            // Already saved group: update in place
+            savedGroups[idx].appIds = tiledAppIds
+            savedGroups[idx].updatedAt = Date()
+            persistSavedGroups()
+        } else {
+            // Unsaved group: open save modal
+            groupModalInputName = suggestedGroupName(for: tiledAppIds)
+            showingSaveGroupModal = true
+        }
+    }
+    
+    public func triggerSaveGroupAs() {
+        guard isMultitaskingActive else { return }
+        groupModalInputName = activeGroupId != nil ? "\(activeGroupName) (Copy)" : suggestedGroupName(for: tiledAppIds)
+        showingSaveGroupModal = true
+    }
+    
+    public func triggerRenameGroup(for id: String? = nil) {
+        let targetId = id ?? activeGroupId
+        guard let targetId = targetId,
+              let group = savedGroups.first(where: { $0.id == targetId }) else { return }
+        groupModalTargetId = targetId
+        groupModalInputName = group.name
+        showingRenameGroupModal = true
+    }
+    
+    public func saveCurrentGroup(name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let finalName = trimmed.isEmpty ? suggestedGroupName(for: tiledAppIds) : trimmed
+        
+        let newGroup = WorkspaceGroup(
+            name: finalName,
+            appIds: tiledAppIds
+        )
+        savedGroups.append(newGroup)
+        activeGroupId = newGroup.id
+        activeGroupName = newGroup.name
+        persistSavedGroups()
+        showingSaveGroupModal = false
+    }
+    
+    public func performRenameGroup(id: String, newName: String) {
+        let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        if let idx = savedGroups.firstIndex(where: { $0.id == id }) {
+            savedGroups[idx].name = trimmed
+            savedGroups[idx].updatedAt = Date()
+            if activeGroupId == id {
+                activeGroupName = trimmed
+            }
+            persistSavedGroups()
+        }
+        showingRenameGroupModal = false
+    }
+    
+    public func launchGroup(_ group: WorkspaceGroup) {
+        withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
+            tiledAppIds = group.appIds
+            activeGroupId = group.id
+            activeGroupName = group.name
+            selectedAppId = group.appIds.first
+            focusedTiledAppId = group.appIds.first
+            if appViewMode == .minimalist {
+                appViewMode = .essentials
+            }
+        }
+    }
+    
+    public func resumeActiveGroup() {
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+            if let first = tiledAppIds.first {
+                selectedAppId = first
+                focusedTiledAppId = first
+            }
+        }
+    }
+    
+    public func quitActiveGroup() {
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
             tiledAppIds = []
+            activeGroupId = nil
+            activeGroupName = "Unsaved Group"
+            selectedAppId = nil
             focusedTiledAppId = nil
         }
+    }
+    
+    public func deleteSavedGroup(id: String) {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            savedGroups.removeAll(where: { $0.id == id })
+            if activeGroupId == id {
+                activeGroupId = nil
+                activeGroupName = "Unsaved Group"
+            }
+        }
+        persistSavedGroups()
     }
     
     public func toggleSidebar() {
@@ -1012,6 +1163,8 @@ public final class AppState: ObservableObject {
             }
         }
         saveAccounts()
+        
+        WebKitPool.shared.clearAccount(accountId: accountId)
         
         if #available(macOS 14.0, *) {
             let store = WKWebsiteDataStore(forIdentifier: toRemove.dataStoreUuid)

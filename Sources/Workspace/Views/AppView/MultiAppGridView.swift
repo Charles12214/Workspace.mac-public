@@ -89,62 +89,72 @@ public struct MultiAppGridView: View {
                 isSingleApp: true,
                 paneIndex: 0
             )
-            .id("pane_\(apps[0].id)_single")
+            .id(apps[0].id)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             
         case 2:
             // 2 Apps: 50 / 50 Side-by-Side Split
-            HStack(spacing: 2) {
+            HStack(spacing: 8) {
                 TiledAppPaneView(app: apps[0], state: state, isSingleApp: false, paneIndex: 0)
-                    .id("pane_\(apps[0].id)_0")
+                    .id(apps[0].id)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 
                 TiledAppPaneView(app: apps[1], state: state, isSingleApp: false, paneIndex: 1)
-                    .id("pane_\(apps[1].id)_1")
+                    .id(apps[1].id)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(8)
+            .animation(.spring(response: 0.4, dampingFraction: 0.82), value: state.tiledAppIds)
             
         case 3:
             // 3 Apps: Master on Left (50%), 2 Stacked on Right (50% each)
-            HStack(spacing: 2) {
+            HStack(spacing: 8) {
                 TiledAppPaneView(app: apps[0], state: state, isSingleApp: false, paneIndex: 0)
-                    .id("pane_\(apps[0].id)_0")
+                    .id(apps[0].id)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 
-                VStack(spacing: 2) {
+                VStack(spacing: 8) {
                     TiledAppPaneView(app: apps[1], state: state, isSingleApp: false, paneIndex: 1)
-                        .id("pane_\(apps[1].id)_1")
+                        .id(apps[1].id)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                     
                     TiledAppPaneView(app: apps[2], state: state, isSingleApp: false, paneIndex: 2)
-                        .id("pane_\(apps[2].id)_2")
+                        .id(apps[2].id)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
+            .padding(8)
+            .animation(.spring(response: 0.4, dampingFraction: 0.82), value: state.tiledAppIds)
             
         case 4:
             // 4 Apps: 2x2 Quad Grid
-            VStack(spacing: 2) {
-                HStack(spacing: 2) {
+            VStack(spacing: 8) {
+                HStack(spacing: 8) {
                     TiledAppPaneView(app: apps[0], state: state, isSingleApp: false, paneIndex: 0)
-                        .id("pane_\(apps[0].id)_0")
+                        .id(apps[0].id)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                     
                     TiledAppPaneView(app: apps[1], state: state, isSingleApp: false, paneIndex: 1)
-                        .id("pane_\(apps[1].id)_1")
+                        .id(apps[1].id)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 
-                HStack(spacing: 2) {
+                HStack(spacing: 8) {
                     TiledAppPaneView(app: apps[2], state: state, isSingleApp: false, paneIndex: 2)
-                        .id("pane_\(apps[2].id)_2")
+                        .id(apps[2].id)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                     
                     TiledAppPaneView(app: apps[3], state: state, isSingleApp: false, paneIndex: 3)
-                        .id("pane_\(apps[3].id)_3")
+                        .id(apps[3].id)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
+            .padding(8)
+            .animation(.spring(response: 0.4, dampingFraction: 0.82), value: state.tiledAppIds)
             
         default:
             EmptyView()
@@ -361,7 +371,7 @@ public struct TiledAppPaneView: View {
                     currentUrlString: $currentUrlString,
                     pageTitle: $pageTitle
                 )
-                .id("\(app.id)_\(state.activeAccountId)")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 
                 // Loading line
                 if isLoading {
@@ -371,12 +381,26 @@ public struct TiledAppPaneView: View {
                         .accentColor(app.primaryColor)
                 }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(nsColor: .windowBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: isSingleApp ? 0 : 12, style: .continuous))
         .overlay(
-            // Focus ring when in multi-app mode
-            RoundedRectangle(cornerRadius: 0)
-                .stroke(isFocused && !isSingleApp ? Color(hex: "1A73E8").opacity(0.8) : Color.primary.opacity(0.06), lineWidth: isFocused && !isSingleApp ? 1.5 : 1)
+            // Focus ring & subtle window border when in multi-app mode
+            RoundedRectangle(cornerRadius: isSingleApp ? 0 : 12, style: .continuous)
+                .stroke(
+                    isFocused && !isSingleApp
+                        ? Color(hex: "1A73E8").opacity(0.85)
+                        : Color.primary.opacity(isSingleApp ? 0 : 0.1),
+                    lineWidth: isFocused && !isSingleApp ? 2 : 1
+                )
+        )
+        .shadow(
+            color: isSingleApp ? Color.clear : Color.black.opacity(0.12),
+            radius: isSingleApp ? 0 : 8,
+            x: 0,
+            y: 3
         )
         .onTapGesture {
             state.focusedTiledAppId = app.id

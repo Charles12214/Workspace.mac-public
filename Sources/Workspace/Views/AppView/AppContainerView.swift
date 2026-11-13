@@ -480,7 +480,15 @@ public struct WorkspaceAppContainer: View {
             HStack(spacing: 2) {
                 viewModeButton(mode: .everything, help: "Everything: Sidebar and Top Bar")
                 viewModeButton(mode: .essentials, help: "Essentials: Top Bar only (Default)")
-                viewModeButton(mode: .minimalist, help: "Minimalist: 'At a glance' Fullscreen")
+                
+                // Minimalist Mode is only available in single-app mode to ensure UI compatibility and stability
+                viewModeButton(
+                    mode: .minimalist,
+                    help: state.isMultitaskingActive ? "Minimalist mode is unavailable during multitasking" : "Minimalist: 'At a glance' Fullscreen"
+                )
+                .disabled(state.isMultitaskingActive)
+                .opacity(state.isMultitaskingActive ? 0.35 : 1.0)
+                
                 viewModeButton(mode: .separated, help: "Separated: Standalone Windows")
             }
             .padding(2)

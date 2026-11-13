@@ -4,6 +4,7 @@ import AppKit
 @main
 struct WorkspaceApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    @ObservedObject private var state = AppState.shared
     
     var body: some Scene {
         WindowGroup {
@@ -15,27 +16,54 @@ struct WorkspaceApp: App {
             SidebarCommands()
             CommandGroup(replacing: .newItem) {
                 Button("New Google Doc") {
-                    if let app = AppState.shared.apps.first(where: { $0.id == "docs" }) {
-                        AppState.shared.launchNewItem(for: app)
+                    if let app = state.apps.first(where: { $0.id == "docs" }) {
+                        state.launchNewItem(for: app)
                     }
                 }
                 .keyboardShortcut("n", modifiers: [.command])
                 
                 Button("New Google Sheet") {
-                    if let app = AppState.shared.apps.first(where: { $0.id == "sheets" }) {
-                        AppState.shared.launchNewItem(for: app)
+                    if let app = state.apps.first(where: { $0.id == "sheets" }) {
+                        state.launchNewItem(for: app)
                     }
                 }
                 .keyboardShortcut("n", modifiers: [.command, .shift])
                 
                 Button("Go to Workspace.mac Home") {
-                    AppState.shared.goHome()
+                    state.goHome()
                 }
                 .keyboardShortcut("h", modifiers: [.command, .shift])
             }
+            CommandGroup(replacing: .saveItem) {
+                Button("Save Group") {
+                    state.triggerSaveGroup()
+                }
+                .keyboardShortcut("s", modifiers: [.command])
+                .disabled(!state.isMultitaskingActive)
+                
+                Button("Save Group As...") {
+                    state.triggerSaveGroupAs()
+                }
+                .keyboardShortcut("s", modifiers: [.command, .shift])
+                .disabled(!state.isMultitaskingActive)
+                
+                Button("Rename Group...") {
+                    state.triggerRenameGroup()
+                }
+                .keyboardShortcut("r", modifiers: [.command, .shift])
+                .disabled(!state.isMultitaskingActive || state.activeGroupId == nil)
+                
+                Divider()
+                
+                Button("Quit Group") {
+                    state.quitActiveGroup()
+                }
+                .keyboardShortcut("w", modifiers: [.command, .option])
+                .disabled(!state.isMultitaskingActive)
+            }
             CommandGroup(replacing: .printItem) {
                 Button("Print...") {
-                    AppState.shared.triggerNativePrint()
+                    state.triggerNativePrint()
                 }
                 .keyboardShortcut("p", modifiers: [.command])
             }

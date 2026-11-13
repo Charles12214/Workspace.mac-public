@@ -119,6 +119,73 @@ public struct SidebarView: View {
                     Spacer()
                 }
                 .padding(.horizontal, 14)
+                
+                // MARK: - Active Group Item (Visible when a group is open)
+                if state.isMultitaskingActive {
+                    Button(action: {
+                        state.resumeActiveGroup()
+                    }) {
+                        HStack(spacing: 10) {
+                            GroupWindowIcon(
+                                size: 22,
+                                isHighlighted: state.selectedAppId != nil,
+                                paneCount: state.tiledAppIds.count
+                            )
+                            
+                            VStack(alignment: .leading, spacing: 1.5) {
+                                HStack(spacing: 5) {
+                                    Text(state.activeGroupName)
+                                        .font(.system(size: 13, weight: state.selectedAppId != nil ? .bold : .semibold))
+                                        .foregroundStyle(state.selectedAppId != nil ? Color.primary : Color.secondary)
+                                        .lineLimit(1)
+                                    
+                                    if state.activeGroupId == nil {
+                                        Text("• Unsaved")
+                                            .font(.system(size: 9.5, weight: .medium))
+                                            .foregroundStyle(Color(hex: "F59E0B"))
+                                    }
+                                }
+                                
+                                Text("\(state.tiledAppIds.count) apps tiled")
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(.tertiary)
+                            }
+                            
+                            Spacer()
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 7)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .fill(state.selectedAppId != nil ? Color(hex: "1A73E8").opacity(0.12) : Color.primary.opacity(0.04))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .stroke(state.selectedAppId != nil ? Color(hex: "1A73E8").opacity(0.4) : Color.primary.opacity(0.06), lineWidth: 1)
+                        )
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, 14)
+                    .contextMenu {
+                        Button("Quit Group") {
+                            state.quitActiveGroup()
+                        }
+                        Divider()
+                        Button("Save Group") {
+                            state.triggerSaveGroup()
+                        }
+                        Button("Save Group As...") {
+                            state.triggerSaveGroupAs()
+                        }
+                        if state.activeGroupId != nil {
+                            Button("Rename Group...") {
+                                state.triggerRenameGroup()
+                            }
+                        }
+                    }
+                    .help("Active Group • Click to resume • Right-click for options")
+                }
             }
             .padding(.bottom, 10)
             
@@ -350,6 +417,42 @@ public struct SidebarView: View {
             // Home icon
             GeminiHomeIcon(isSelected: state.selectedAppId == nil) {
                 state.goHome()
+            }
+            
+            // Active Group icon in collapsed rail
+            if state.isMultitaskingActive {
+                Button(action: { state.resumeActiveGroup() }) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(state.selectedAppId != nil ? Color(hex: "1A73E8").opacity(0.2) : Color.primary.opacity(0.06))
+                            .frame(width: 36, height: 36)
+                        
+                        GroupWindowIcon(
+                            size: 20,
+                            isHighlighted: state.selectedAppId != nil,
+                            paneCount: state.tiledAppIds.count
+                        )
+                    }
+                }
+                .buttonStyle(.plain)
+                .contextMenu {
+                    Button("Quit Group") {
+                        state.quitActiveGroup()
+                    }
+                    Divider()
+                    Button("Save Group") {
+                        state.triggerSaveGroup()
+                    }
+                    Button("Save Group As...") {
+                        state.triggerSaveGroupAs()
+                    }
+                    if state.activeGroupId != nil {
+                        Button("Rename Group...") {
+                            state.triggerRenameGroup()
+                        }
+                    }
+                }
+                .help("\(state.activeGroupName) • Active Group • Click to resume")
             }
             
             Divider().frame(width: 32).opacity(0.3)

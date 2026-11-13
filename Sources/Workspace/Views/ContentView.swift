@@ -17,7 +17,7 @@ public struct ContentView: View {
                 } else if let app = state.selectedApp {
                     // MARK: - App View Container (Everything, Essentials [Default], Minimalist ["At a glance"])
                     WorkspaceAppContainer(app: app, state: state, showingSettings: $showingSettings)
-                        .id(app.id)
+                        .id(state.isMultitaskingActive ? "multitasking_active" : app.id)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     // MARK: - Home Launcher View with Sidebar
@@ -52,6 +52,20 @@ public struct ContentView: View {
             // Download Progress Bar & "Downloaded to [file location]" Popup
             DownloadHUDView()
                 .zIndex(1000)
+            
+            // Save Group Modal Dialog
+            if state.showingSaveGroupModal {
+                SaveGroupModalView(state: state)
+                    .zIndex(1100)
+                    .transition(.opacity)
+            }
+            
+            // Rename Group Modal Dialog
+            if state.showingRenameGroupModal {
+                RenameGroupModalView(state: state)
+                    .zIndex(1100)
+                    .transition(.opacity)
+            }
         }
         .preferredColorScheme(state.effectiveColorScheme)
         .sheet(isPresented: $showingSettings) {

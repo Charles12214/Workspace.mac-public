@@ -365,13 +365,66 @@ public struct HomeView: View {
                         }
                     )
                 }
-                .contentShape(Rectangle())
-                .onDrop(
-                    of: [.utf8PlainText, .plainText, .text],
-                    delegate: PinnedAppsDropDelegate(isTargeted: $isPinDropTargeted) { appId in
-                        state.setPinned(appId: appId, pinned: true)
+                
+                // MARK: - Groups Section (Saved Multi-Window Overviews)
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        HStack(spacing: 8) {
+                            Text("Groups")
+                                .font(.system(size: 15, weight: .bold, design: .rounded))
+                                .foregroundStyle(.primary)
+                            
+                            GroupWindowIcon(size: 16)
+                        }
+                        
+                        Spacer()
+                        
+                        if !state.savedGroups.isEmpty {
+                            Text("\(state.savedGroups.count) saved")
+                                .font(.system(size: 11))
+                                .foregroundStyle(.secondary)
+                        }
                     }
-                )
+                    
+                    if state.savedGroups.isEmpty {
+                        // Empty State Explaining Groups
+                        HStack(spacing: 14) {
+                            GroupWindowIcon(size: 26)
+                            
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("No Saved Groups Yet")
+                                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                                    .foregroundStyle(.primary)
+                                
+                                Text("Tile 2 to 4 apps in split-screen, then press ⌘S or choose File → Save Group to save your layout here for instant 1-click launch.")
+                                    .font(.system(size: 11.5))
+                                    .foregroundStyle(.secondary)
+                            }
+                            
+                            Spacer()
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 14)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(Color.primary.opacity(0.03))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+                        )
+                    } else {
+                        LazyVGrid(columns: gridColumns, spacing: 14) {
+                            ForEach(state.savedGroups) { group in
+                                SavedGroupTileView(
+                                    group: group,
+                                    state: state,
+                                    hideTitle: state.hideTileTitles
+                                )
+                            }
+                        }
+                    }
+                }
                 
                 Spacer(minLength: 20)
             }
@@ -561,5 +614,179 @@ public struct ModernQuarterIconTile: View {
                 isHovered = h
             }
         }
+    }
+}
+
+// MARK: - Saved Group Tile View (Grey Rounded Window Frame)
+public struct SavedGroupTileView: View {
+    public let group: WorkspaceGroup
+    @ObservedObject public var state: AppState
+    public let hideTitle: Bool
+    
+    @State private var isHovered: Bool = false
+    @State private var isEditingInline: Bool = false
+    @State private var inlineTitle: String = ""
+    @FocusState private var isTextFieldFocused: Bool
+    
+    public init(group: WorkspaceGroup, state: AppState, hideTitle: Bool) {
+        self.group = group
+        self.state = state
+        self.hideTitle = hideTitle
+    }
+    
+    private var groupApps: [WorkspaceAppItem] {
+        group.appIds.compactMap { id in state.apps.first(where: { $0.id == id }) }
+    }
+    
+    public var body: some View {
+        Group {
+            if hideTitle {
+                // Compact icon-only tile
+                ZStack {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(Color.secondary.opacity(isHovered ? 0.12 : 0.05))
+                    
+                    GroupWindowIcon(
+                        size: 32,
+                        isHighlighted: isHovered,
+                        paneCount: group.appIds.count
+                    )
+                }
+                .frame(width: 66, height: 66)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(
+                            isHovered ? Color(hex: "1A73E8").opacity(0.5) : Color.primary.opacity(0.08),
+                            lineWidth: isHovered ? 1.5 : 1
+                        )
+                )
+                .shadow(color: isHovered ? Color.black.opacity(0.12) : Color.clear, radius: 6, y: 2)
+                .scaleEffect(isHovered ? 1.04 : 1.0)
+                .help("\(group.name) • \(group.appIds.count) apps")
+                .onTapGesture {
+                    state.launchGroup(group)
+                }
+            } else {
+                // Wide Tile with Grey Rounded Window Frame Aesthetic
+                ZStack(alignment: .topLeading) {
+                    // Tile Background
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(Color.primary.opacity(isHovered ? 0.05 : 0.03))
+                    
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(alignment: .top, spacing: 10) {
+                            // Grey rounded window frame icon
+                            GroupWindowIcon(
+                                size: 26,
+                                isHighlighted: isHovered,
+                                paneCount: group.appIds.count
+                            )
+                            
+                            VStack(alignment: .leading, spacing: 2) {
+                                // Title with Option B: Double Click to Rename
+                                if isEditingInline {
+                                    TextField("Group Name", text: $inlineTitle, onCommit: {
+                                        commitInlineRename()
+                                    })
+                                    .textFieldStyle(.plain)
+                                    .font(.system(size: 13.5, weight: .bold, design: .rounded))
+                                    .focused($isTextFieldFocused)
+                                    .padding(.horizontal, 4)
+                                    .padding(.vertical, 2)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 4)
+                                            .fill(Color(nsColor: .textBackgroundColor))
+                                    )
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 4)
+                                            .stroke(Color(hex: "1A73E8"), lineWidth: 1.5)
+                                    )
+                                    .onAppear {
+                                        inlineTitle = group.name
+                                        isTextFieldFocused = true
+                                    }
+                                } else {
+                                    Text(group.name)
+                                        .font(.system(size: 13.5, weight: .bold, design: .rounded))
+                                        .foregroundStyle(Color.primary)
+                                        .lineLimit(1)
+                                        .onTapGesture(count: 2) {
+                                            startInlineRename()
+                                        }
+                                        .help("Double-click title to rename")
+                                }
+                                
+                                Text("\(group.appIds.count) Apps • " + groupApps.map(\.name).joined(separator: ", "))
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
+                            
+                            Spacer()
+                            
+                            // App Icon Overlap Stack
+                            HStack(spacing: -4) {
+                                ForEach(groupApps.prefix(4)) { app in
+                                    GoogleAppIconView(appId: app.id, size: 16)
+                                        .background(Circle().fill(Color(nsColor: .windowBackgroundColor)))
+                                        .clipShape(Circle())
+                                }
+                            }
+                        }
+                        
+                        Spacer()
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.top, 12)
+                    .padding(.bottom, 10)
+                }
+                .frame(height: 86)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(
+                            isHovered ? Color(hex: "1A73E8").opacity(0.4) : Color.primary.opacity(0.08),
+                            lineWidth: isHovered ? 1.5 : 1
+                        )
+                )
+                .shadow(color: isHovered ? Color.black.opacity(0.12) : Color.clear, radius: 8, y: 3)
+                .scaleEffect(isHovered ? 1.015 : 1.0)
+                .onTapGesture {
+                    if !isEditingInline {
+                        state.launchGroup(group)
+                    }
+                }
+            }
+        }
+        .contentShape(Rectangle())
+        .contextMenu {
+            Button("Open Group") {
+                state.launchGroup(group)
+            }
+            Button("Rename Group...") {
+                state.triggerRenameGroup(for: group.id)
+            }
+            Divider()
+            Button(role: .destructive, action: {
+                state.deleteSavedGroup(id: group.id)
+            }) {
+                Label("Delete Group", systemImage: "trash")
+            }
+        }
+        .onHover { h in
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
+                isHovered = h
+            }
+        }
+    }
+    
+    private func startInlineRename() {
+        inlineTitle = group.name
+        isEditingInline = true
+    }
+    
+    private func commitInlineRename() {
+        state.performRenameGroup(id: group.id, newName: inlineTitle)
+        isEditingInline = false
     }
 }

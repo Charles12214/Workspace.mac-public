@@ -136,6 +136,53 @@ public struct WorkspaceWebView: View {
     }
 }
 
+// MARK: - Native WebKit Host View (Protects WKWebView from SwiftUI deallocation & blanking)
+@MainActor
+public final class WebKitHostView: NSView {
+    public private(set) weak var currentWebView: WKWebView?
+    
+    public override init(frame: NSRect) {
+        super.init(frame: frame)
+        self.wantsLayer = true
+        self.autoresizingMask = [.width, .height]
+    }
+    
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+    
+    public func attach(webView: WKWebView) {
+        if currentWebView === webView && webView.superview === self {
+            if webView.frame != self.bounds {
+                webView.frame = self.bounds
+            }
+            return
+        }
+        
+        // Remove any old subviews from this host
+        for subview in self.subviews {
+            subview.removeFromSuperview()
+        }
+        
+        // Detach safely from previous host if attached elsewhere
+        if let oldSuper = webView.superview, oldSuper !== self {
+            webView.removeFromSuperview()
+        }
+        
+        self.currentWebView = webView
+        webView.frame = self.bounds
+        webView.autoresizingMask = [.width, .height]
+        self.addSubview(webView)
+    }
+    
+    public override func layout() {
+        super.layout()
+        if let wv = currentWebView, wv.frame != self.bounds {
+            wv.frame = self.bounds
+        }
+    }
+}
+
 // MARK: - NSViewRepresentable for WKWebView
 public struct WebKitRepresentable: NSViewRepresentable {
     public let url: URL
@@ -171,71 +218,118 @@ public struct WebKitRepresentable: NSViewRepresentable {
         Coordinator(self)
     }
     
-    public func makeNSView(context: Context) -> WKWebView {
-        let configuration = WKWebViewConfiguration()
-        configuration.websiteDataStore = AppState.shared.activeDataStore
-        configuration.preferences.setValue(true, forKey: "developerExtrasEnabled")
+    public func makeNSView(context: Context) -> WebKitHostView {
+        let hostView = WebKitHostView(frame: NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1400, height: 900))
         
-        // Match exact native Safari 27.2 User-Agent on macOS for crisp Retina canvas rendering in Google Docs & Sheets
-        configuration.applicationNameForUserAgent = "Version/27.2 Safari/605.1.15"
-        
-        // Suppress browser upgrade banners, hide companion sidebar cleanly via CSS, and route window.print() to native print handler
-        let customScript = """
-        if (!window.location.hostname.includes('accounts.google.com')) {
-            const style = document.createElement('style');
-            style.type = 'text/css';
-            style.innerHTML = `
-                /* Promo / Download Banners */
-                #push-modal, [aria-label*="Try Chrome"], [aria-label*="switch to Chrome"],
-                [aria-label*="supported browser"], .apps-promo-card, .promo-banner, .app-download-banner,
-                div[role="alert"]:has(a[href*="chrome"]), .butterbar-container:has(a[href*="chrome"]),
-
-                /* Cleanly hide Google companion right sidebar & collapse toggle */
-                .companion-collapser-button-container,
-                .companion-app-sidebar-container {
-                    display: none !important;
-                }
-            `;
-            (document.head || document.documentElement).appendChild(style);
+        let (wv, isNew) = WebKitPool.shared.getOrCreateWebView(
+            appId: app.id,
+            accountId: AppState.shared.activeAccountId
+        ) {
+            let configuration = WKWebViewConfiguration()
+            configuration.websiteDataStore = AppState.shared.activeDataStore
+            configuration.preferences.setValue(true, forKey: "developerExtrasEnabled")
+            configuration.suppressesIncrementalRendering = false
             
-            // Bridge native window.print() so Google Docs/Sheets/Slides trigger native macOS print sheet
-            window.print = function() {
-                try {
-                    window.webkit.messageHandlers.printHandler.postMessage('print');
-                } catch(e) {
-                    console.warn('Native printHandler not available', e);
-                }
-            };
+            // Match exact native Safari 27.2 User-Agent on macOS for crisp Retina canvas rendering in Google Docs & Sheets
+            configuration.applicationNameForUserAgent = "Version/27.2 Safari/605.1.15"
+            
+            // Suppress browser upgrade banners, hide companion sidebar cleanly via CSS, and route window.print() to native print handler
+            let customScript = """
+            if (!window.location.hostname.includes('accounts.google.com')) {
+                const style = document.createElement('style');
+                style.type = 'text/css';
+                style.innerHTML = `
+                    /* Promo / Download Banners */
+                    #push-modal, [aria-label*="Try Chrome"], [aria-label*="switch to Chrome"],
+                    [aria-label*="supported browser"], .apps-promo-card, .promo-banner, .app-download-banner,
+                    div[role="alert"]:has(a[href*="chrome"]), .butterbar-container:has(a[href*="chrome"]),
+
+                    /* Cleanly hide Google companion right sidebar & collapse toggle */
+                    .companion-collapser-button-container,
+                    .companion-app-sidebar-container {
+                        display: none !important;
+                    }
+                `;
+                (document.head || document.documentElement).appendChild(style);
+                
+                // Bridge native window.print() so Google Docs/Sheets/Slides trigger native macOS print sheet
+                window.print = function() {
+                    try {
+                        window.webkit.messageHandlers.printHandler.postMessage('print');
+                    } catch(e) {
+                        console.warn('Native printHandler not available', e);
+                    }
+                };
+            }
+            """
+            let userScript = WKUserScript(source: customScript, injectionTime: .atDocumentEnd, forMainFrameOnly: true)
+            configuration.userContentController.addUserScript(userScript)
+            configuration.userContentController.add(LeakAvoider(delegate: context.coordinator), name: "printHandler")
+            
+            // Initialize with real screen frame so WebKit and Google Docs initialize at full Retina resolution
+            let initialFrame = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1400, height: 900)
+            let newWv = WKWebView(frame: initialFrame, configuration: configuration)
+            newWv.autoresizingMask = [.width, .height]
+            newWv.allowsMagnification = true
+            newWv.pageZoom = 1.0
+            newWv.magnification = 1.0
+            return newWv
         }
-        """
-        let userScript = WKUserScript(source: customScript, injectionTime: .atDocumentEnd, forMainFrameOnly: true)
-        configuration.userContentController.addUserScript(userScript)
-        configuration.userContentController.add(LeakAvoider(delegate: context.coordinator), name: "printHandler")
         
-        // Initialize with real screen frame so WebKit and Google Docs initialize at full Retina resolution
-        let initialFrame = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1400, height: 900)
-        let wv = WKWebView(frame: initialFrame, configuration: configuration)
-        wv.autoresizingMask = [.width, .height]
         wv.navigationDelegate = context.coordinator
         wv.uiDelegate = context.coordinator
-        wv.allowsMagnification = true
-        wv.pageZoom = 1.0
-        wv.magnification = 1.0
-        
         context.coordinator.setupObservers(for: wv)
         
-        let request = URLRequest(url: url)
-        wv.load(request)
+        if isNew || wv.url == nil {
+            var request = URLRequest(url: url)
+            request.cachePolicy = .useProtocolCachePolicy
+            wv.load(request)
+        }
+        
+        hostView.attach(webView: wv)
         
         DispatchQueue.main.async {
             self.webViewOut = wv
-            AppState.shared.activeWebView = wv
+            self.isLoading = wv.isLoading
+            self.canGoBack = wv.canGoBack
+            self.canGoForward = wv.canGoForward
+            if let t = wv.title, !t.isEmpty {
+                self.pageTitle = t
+            }
+            if let u = wv.url?.absoluteString, !u.isEmpty {
+                self.currentUrlString = u
+            }
+            if AppState.shared.focusedTiledAppId == self.app.id || AppState.shared.selectedAppId == self.app.id {
+                AppState.shared.activeWebView = wv
+            }
         }
         
-        return wv
+        return hostView
     }
     
-    public func updateNSView(_ nsView: WKWebView, context: Context) {}
+    public func updateNSView(_ hostView: WebKitHostView, context: Context) {
+        if let wv = WebKitPool.shared.getWebView(appId: app.id, accountId: AppState.shared.activeAccountId) {
+            hostView.attach(webView: wv)
+            wv.navigationDelegate = context.coordinator
+            wv.uiDelegate = context.coordinator
+            
+            DispatchQueue.main.async {
+                self.isLoading = wv.isLoading
+                self.canGoBack = wv.canGoBack
+                self.canGoForward = wv.canGoForward
+            }
+            
+            if wv.url == nil {
+                var request = URLRequest(url: url)
+                request.cachePolicy = .useProtocolCachePolicy
+                wv.load(request)
+            }
+        }
+    }
+    
+    public static func dismantleNSView(_ hostView: WebKitHostView, coordinator: Coordinator) {
+        coordinator.cleanup()
+    }
     
     public class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate, WKScriptMessageHandler {
         var parent: WebKitRepresentable
@@ -245,7 +339,16 @@ public struct WebKitRepresentable: NSViewRepresentable {
             self.parent = parent
         }
         
+        func cleanup() {
+            for obs in observers {
+                obs.invalidate()
+            }
+            observers.removeAll()
+        }
+        
         func setupObservers(for webView: WKWebView) {
+            cleanup()
+            
             observers.append(webView.observe(\.canGoBack, options: [.new]) { [weak self] wv, _ in
                 DispatchQueue.main.async {
                     self?.parent.canGoBack = wv.canGoBack
