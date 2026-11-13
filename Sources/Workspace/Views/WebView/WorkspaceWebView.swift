@@ -372,9 +372,14 @@ public struct WebKitRepresentable: NSViewRepresentable {
         context.coordinator.setupObservers(for: wv)
         
         if isNew || wv.url == nil {
-            var request = URLRequest(url: url)
-            request.cachePolicy = OfflineManager.shared.isOffline ? .returnCacheDataElseLoad : .useProtocolCachePolicy
-            wv.load(request)
+            if OfflineManager.shared.isOffline {
+                let shell = GoogleWorkspaceOfflineShell.html(for: app, userName: AppState.shared.userProfile.name, userEmail: AppState.shared.userProfile.email)
+                wv.loadHTMLString(shell, baseURL: app.url)
+            } else {
+                var request = URLRequest(url: url)
+                request.cachePolicy = .useProtocolCachePolicy
+                wv.load(request)
+            }
         }
         
         hostView.attach(webView: wv)
@@ -415,9 +420,14 @@ public struct WebKitRepresentable: NSViewRepresentable {
             }
             
             if wv.url == nil {
-                var request = URLRequest(url: url)
-                request.cachePolicy = OfflineManager.shared.isOffline ? .returnCacheDataElseLoad : .useProtocolCachePolicy
-                wv.load(request)
+                if OfflineManager.shared.isOffline {
+                    let shell = GoogleWorkspaceOfflineShell.html(for: app, userName: AppState.shared.userProfile.name, userEmail: AppState.shared.userProfile.email)
+                    wv.loadHTMLString(shell, baseURL: app.url)
+                } else {
+                    var request = URLRequest(url: url)
+                    request.cachePolicy = .useProtocolCachePolicy
+                    wv.load(request)
+                }
             }
         }
     }
@@ -532,12 +542,13 @@ public struct WebKitRepresentable: NSViewRepresentable {
                nsError.code == NSURLErrorTimedOut ||
                OfflineManager.shared.isOffline {
                 
-                // Fall back to WebKit's persistent offline cache so Google Docs offline shell loads
-                if let currentUrl = webView.url ?? parent.url as URL? {
-                    var cachedReq = URLRequest(url: currentUrl)
-                    cachedReq.cachePolicy = .returnCacheDataElseLoad
-                    webView.load(cachedReq)
-                }
+                // Immediately serve the Google Workspace Offline App Shell so the page renders the real offline UI
+                let shell = GoogleWorkspaceOfflineShell.html(
+                    for: parent.app,
+                    userName: AppState.shared.userProfile.name,
+                    userEmail: AppState.shared.userProfile.email
+                )
+                webView.loadHTMLString(shell, baseURL: parent.app.url)
                 parent.isOfflineError = true
             }
             parent.isLoading = false

@@ -113,7 +113,11 @@ public final class OfflineManager: ObservableObject {
                 // If transitioning from offline to online, signal auto-reload across active webviews
                 if self.lastWasOffline && !currentlyOffline {
                     AppState.shared.webViewActionSignal = .reload
-                    AppState.shared.activeWebView?.reload()
+                    if let curApp = AppState.shared.selectedApp {
+                        AppState.shared.activeWebView?.load(URLRequest(url: curApp.url))
+                    } else {
+                        AppState.shared.activeWebView?.reload()
+                    }
                 }
                 self.lastWasOffline = currentlyOffline
             }
