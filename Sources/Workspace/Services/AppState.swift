@@ -220,9 +220,45 @@ public final class AppState: ObservableObject {
             return apps.first(where: { $0.id == "contacts" })
         } else if host.contains("gemini.google.com") {
             return apps.first(where: { $0.id == "gemini" })
+        } else if host.contains("tasks.google.com") {
+            return apps.first(where: { $0.id == "tasks" })
+        } else if host.contains("classroom.google.com") {
+            return apps.first(where: { $0.id == "classroom" })
+        } else if host.contains("console.cloud.google.com") {
+            return apps.first(where: { $0.id == "cloud" })
+        } else if host.contains("admin.google.com") {
+            return apps.first(where: { $0.id == "admin" })
         }
         
         return nil
+    }
+    
+    // MARK: - Dynamic Auto App Swapping Detection
+    public func notifyUrlChanged(sourceAppId: String, newUrlString: String) {
+        guard let detectedApp = app(for: newUrlString) else { return }
+        if detectedApp.id != sourceAppId {
+            // Seamlessly transfer the active WKWebView in WebKitPool so the user's document session is preserved
+            WebKitPool.shared.transferWebView(fromAppId: sourceAppId, toAppId: detectedApp.id, accountId: activeAccountId)
+            
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                if !isMultitaskingActive {
+                    if selectedAppId == sourceAppId {
+                        selectedAppId = detectedApp.id
+                        focusedTiledAppId = detectedApp.id
+                    }
+                } else {
+                    if let idx = tiledAppIds.firstIndex(of: sourceAppId) {
+                        tiledAppIds[idx] = detectedApp.id
+                        if focusedTiledAppId == sourceAppId {
+                            focusedTiledAppId = detectedApp.id
+                        }
+                        if selectedAppId == sourceAppId {
+                            selectedAppId = detectedApp.id
+                        }
+                    }
+                }
+            }
+        }
     }
     
     public func dismissUpdate(_ tag: String) {

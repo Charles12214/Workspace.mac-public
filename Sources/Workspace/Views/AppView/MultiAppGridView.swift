@@ -93,19 +93,16 @@ public struct MultiAppGridView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             
         case 2:
-            // 2 Apps: 50 / 50 Side-by-Side Split
+            // 2 Apps: 50 / 50 Side-by-Side Split (Smooth Animated Reordering)
             HStack(spacing: 8) {
-                TiledAppPaneView(app: apps[0], state: state, isSingleApp: false, paneIndex: 0)
-                    .id(apps[0].id)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                
-                TiledAppPaneView(app: apps[1], state: state, isSingleApp: false, paneIndex: 1)
-                    .id(apps[1].id)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                ForEach(Array(apps.enumerated()), id: \.element.id) { index, item in
+                    TiledAppPaneView(app: item, state: state, isSingleApp: false, paneIndex: index)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(8)
-            .animation(.spring(response: 0.4, dampingFraction: 0.82), value: state.tiledAppIds)
+            .animation(.spring(response: 0.38, dampingFraction: 0.82), value: state.tiledAppIds)
             
         case 3:
             // 3 Apps: Master on Left (50%), 2 Stacked on Right (50% each)
@@ -336,6 +333,7 @@ public struct TiledAppPaneView: View {
     @State private var currentUrlString: String = ""
     @State private var pageTitle: String = ""
     @State private var isHovered: Bool = false
+    @State private var isOfflineError: Bool = false
     
     private var isFocused: Bool {
         state.focusedTiledAppId == app.id
@@ -359,22 +357,33 @@ public struct TiledAppPaneView: View {
                 paneHeaderView
             }
             
-            // WebKit WebView Container
+            // WebKit WebView Container or Native Offline Document Hub
             ZStack(alignment: .top) {
-                WebKitRepresentable(
-                    url: state.overrideUrlForApp[app.id] ?? app.resolvedUrl(for: state.userProfile.email),
-                    app: app,
-                    webViewOut: $webView,
-                    canGoBack: $canGoBack,
-                    canGoForward: $canGoForward,
-                    isLoading: $isLoading,
-                    currentUrlString: $currentUrlString,
-                    pageTitle: $pageTitle
-                )
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                if isOfflineError || (OfflineManager.shared.isOffline && (webView?.url == nil || currentUrlString.isEmpty)) {
+                    OfflineDocumentHubView(app: app) {
+                        isOfflineError = false
+                        if let wv = webView {
+                            wv.reload()
+                        }
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    WebKitRepresentable(
+                        url: state.overrideUrlForApp[app.id] ?? app.resolvedUrl(for: state.userProfile.email),
+                        app: app,
+                        webViewOut: $webView,
+                        canGoBack: $canGoBack,
+                        canGoForward: $canGoForward,
+                        isLoading: $isLoading,
+                        currentUrlString: $currentUrlString,
+                        pageTitle: $pageTitle,
+                        isOfflineError: $isOfflineError
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
                 
                 // Loading line
-                if isLoading {
+                if isLoading && !isOfflineError && !OfflineManager.shared.isOffline {
                     ProgressView()
                         .progressViewStyle(.linear)
                         .frame(height: 2)
@@ -385,7 +394,7 @@ public struct TiledAppPaneView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(nsColor: .windowBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: isSingleApp ? 0 : 12, style: .continuous))
+        .cornerRadius(isSingleApp ? 0 : 12)
         .overlay(
             // Focus ring & subtle window border when in multi-app mode
             RoundedRectangle(cornerRadius: isSingleApp ? 0 : 12, style: .continuous)

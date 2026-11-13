@@ -40,6 +40,14 @@ public final class WebKitPool {
         webViews.removeValue(forKey: k)
     }
     
+    public func transferWebView(fromAppId: String, toAppId: String, accountId: String) {
+        let fromKey = key(appId: fromAppId, accountId: accountId)
+        let toKey = key(appId: toAppId, accountId: accountId)
+        if let existing = webViews.removeValue(forKey: fromKey) {
+            webViews[toKey] = existing
+        }
+    }
+    
     public func clearAccount(accountId: String) {
         webViews = webViews.filter { !$0.key.hasSuffix("_\(accountId)") }
     }

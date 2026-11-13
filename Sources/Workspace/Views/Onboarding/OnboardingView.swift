@@ -466,7 +466,8 @@ public struct OnboardingView: View {
                                     Text("Unit")
                                         .font(.system(size: 11, weight: .medium))
                                         .foregroundStyle(.secondary)
-                                        .fixedSize()
+                                        .lineLimit(1)
+                                        .fixedSize(horizontal: true, vertical: false)
                                     
                                     Picker("", selection: $weatherService.temperatureUnit) {
                                         ForEach(TemperatureUnit.allCases) { unit in
@@ -477,12 +478,14 @@ public struct OnboardingView: View {
                                     .labelsHidden()
                                     .frame(width: 76)
                                 }
+                                .fixedSize(horizontal: true, vertical: false)
                                 
                                 HStack(spacing: 6) {
                                     Text("Time")
                                         .font(.system(size: 11, weight: .medium))
                                         .foregroundStyle(.secondary)
-                                        .fixedSize()
+                                        .lineLimit(1)
+                                        .fixedSize(horizontal: true, vertical: false)
                                     
                                     Picker("", selection: $weatherService.is24HourTime) {
                                         Text("12h").tag(false)
@@ -492,6 +495,7 @@ public struct OnboardingView: View {
                                     .labelsHidden()
                                     .frame(width: 80)
                                 }
+                                .fixedSize(horizontal: true, vertical: false)
                             }
                         }
                         .padding(.top, 4)

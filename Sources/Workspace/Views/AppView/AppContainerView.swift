@@ -85,7 +85,7 @@ public struct WorkspaceAppContainer: View {
     
     // Dynamic Active App: switches automatically when user navigates (e.g. Drive -> Docs)
     private var displayApp: WorkspaceAppItem {
-        state.app(for: currentUrlString) ?? app
+        state.selectedApp ?? state.app(for: currentUrlString) ?? app
     }
     
     public init(app: WorkspaceAppItem, state: AppState, showingSettings: Binding<Bool>) {
@@ -496,6 +496,22 @@ public struct WorkspaceAppContainer: View {
             
             // MARK: - Live Weather & Local Time Widget
             WeatherTimeWidgetView()
+            
+            // MARK: - Ambient Offline Badge
+            if OfflineManager.shared.isOffline {
+                HStack(spacing: 5) {
+                    Image(systemName: "wifi.slash")
+                        .font(.system(size: 11, weight: .bold))
+                    Text("Offline")
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                }
+                .foregroundStyle(Color(hex: "F59E0B"))
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Capsule().fill(Color(hex: "F59E0B").opacity(0.12)))
+                .overlay(Capsule().stroke(Color(hex: "F59E0B").opacity(0.28), lineWidth: 1))
+                .help("Offline Mode Active • Local files & caching enabled")
+            }
             
             // Settings Button
             Button(action: { showingSettings = true }) {

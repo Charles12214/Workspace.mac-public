@@ -13,6 +13,7 @@ public struct WorkspaceWebView: View {
     @State private var isHoveringTopLeft: Bool = false
     @State private var currentUrlString: String = ""
     @State private var pageTitle: String = ""
+    @State private var isOfflineError: Bool = false
     
     public init(app: WorkspaceAppItem, onReturnHome: @escaping () -> Void) {
         self.app = app
@@ -21,18 +22,28 @@ public struct WorkspaceWebView: View {
     
     public var body: some View {
         ZStack(alignment: .topLeading) {
-            // MARK: - Edge-to-Edge Embedded WebKit View (No URL bar space, full window)
-            WebKitRepresentable(
-                url: app.url,
-                app: app,
-                webViewOut: $webView,
-                canGoBack: $canGoBack,
-                canGoForward: $canGoForward,
-                isLoading: $isLoading,
-                currentUrlString: $currentUrlString,
-                pageTitle: $pageTitle
-            )
-            .ignoresSafeArea()
+            // MARK: - Native Offline Document Hub or Edge-to-Edge Embedded WebKit View
+            if isOfflineError || (OfflineManager.shared.isOffline && (webView?.url == nil || currentUrlString.isEmpty)) {
+                OfflineDocumentHubView(app: app) {
+                    isOfflineError = false
+                    if let wv = webView {
+                        wv.reload()
+                    }
+                }
+            } else {
+                WebKitRepresentable(
+                    url: app.url,
+                    app: app,
+                    webViewOut: $webView,
+                    canGoBack: $canGoBack,
+                    canGoForward: $canGoForward,
+                    isLoading: $isLoading,
+                    currentUrlString: $currentUrlString,
+                    pageTitle: $pageTitle,
+                    isOfflineError: $isOfflineError
+                )
+                .ignoresSafeArea()
+            }
             
             // MARK: - Top Windowed-Fullscreen Zoom Trigger Zone (Double click top edge to enlarge)
             Color.clear
@@ -153,9 +164,10 @@ public final class WebKitHostView: NSView {
     
     public func attach(webView: WKWebView) {
         if currentWebView === webView && webView.superview === self {
-            if webView.frame != self.bounds {
+            if self.bounds.width > 0 && self.bounds.height > 0 && webView.frame != self.bounds {
                 webView.frame = self.bounds
             }
+            webView.isHidden = false
             return
         }
         
@@ -170,15 +182,51 @@ public final class WebKitHostView: NSView {
         }
         
         self.currentWebView = webView
-        webView.frame = self.bounds
+        if self.bounds.width > 0 && self.bounds.height > 0 {
+            webView.frame = self.bounds
+        } else {
+            webView.frame = NSRect(x: 0, y: 0, width: 800, height: 600)
+        }
         webView.autoresizingMask = [.width, .height]
+        webView.isHidden = false
         self.addSubview(webView)
+        self.needsLayout = true
+    }
+    
+    public override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        if let wv = currentWebView, newSize.width > 0 && newSize.height > 0 {
+            wv.frame = NSRect(origin: .zero, size: newSize)
+        }
+    }
+    
+    public override func resizeSubviews(withOldSize oldSize: NSSize) {
+        super.resizeSubviews(withOldSize: oldSize)
+        if let wv = currentWebView, self.bounds.width > 0 && self.bounds.height > 0 {
+            wv.frame = self.bounds
+        }
+    }
+    
+    public override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if let wv = currentWebView, window != nil {
+            if self.bounds.width > 0 && self.bounds.height > 0 {
+                wv.frame = self.bounds
+            }
+            wv.isHidden = false
+            wv.needsLayout = true
+            wv.needsDisplay = true
+        }
     }
     
     public override func layout() {
         super.layout()
-        if let wv = currentWebView, wv.frame != self.bounds {
-            wv.frame = self.bounds
+        if let wv = currentWebView {
+            if wv.frame != self.bounds && self.bounds.width > 0 && self.bounds.height > 0 {
+                wv.frame = self.bounds
+            }
+            wv.needsLayout = true
+            wv.needsDisplay = true
         }
     }
 }
@@ -193,6 +241,7 @@ public struct WebKitRepresentable: NSViewRepresentable {
     @Binding public var isLoading: Bool
     @Binding public var currentUrlString: String
     @Binding public var pageTitle: String
+    @Binding public var isOfflineError: Bool
     
     public init(
         url: URL,
@@ -202,7 +251,8 @@ public struct WebKitRepresentable: NSViewRepresentable {
         canGoForward: Binding<Bool>,
         isLoading: Binding<Bool>,
         currentUrlString: Binding<String>,
-        pageTitle: Binding<String>
+        pageTitle: Binding<String>,
+        isOfflineError: Binding<Bool> = .constant(false)
     ) {
         self.url = url
         self.app = app
@@ -212,6 +262,7 @@ public struct WebKitRepresentable: NSViewRepresentable {
         self._isLoading = isLoading
         self._currentUrlString = currentUrlString
         self._pageTitle = pageTitle
+        self._isOfflineError = isOfflineError
     }
     
     public func makeCoordinator() -> Coordinator {
@@ -232,6 +283,10 @@ public struct WebKitRepresentable: NSViewRepresentable {
             
             // Match exact native Safari 27.2 User-Agent on macOS for crisp Retina canvas rendering in Google Docs & Sheets
             configuration.applicationNameForUserAgent = "Version/27.2 Safari/605.1.15"
+            
+            // Inject official Google Docs Offline Chrome Extension Polyfill / Shim
+            configuration.userContentController.addUserScript(GoogleDocsOfflineExtension.makeUserScript())
+            configuration.userContentController.add(LeakAvoider(delegate: context.coordinator), name: "offlineExtensionReady")
             
             // Suppress browser upgrade banners, hide companion sidebar cleanly via CSS, and route window.print() to native print handler
             let customScript = """
@@ -310,8 +365,12 @@ public struct WebKitRepresentable: NSViewRepresentable {
     public func updateNSView(_ hostView: WebKitHostView, context: Context) {
         if let wv = WebKitPool.shared.getWebView(appId: app.id, accountId: AppState.shared.activeAccountId) {
             hostView.attach(webView: wv)
+            if hostView.bounds.width > 0 && hostView.bounds.height > 0 {
+                wv.frame = hostView.bounds
+            }
             wv.navigationDelegate = context.coordinator
             wv.uiDelegate = context.coordinator
+            context.coordinator.setupObservers(for: wv)
             
             DispatchQueue.main.async {
                 self.isLoading = wv.isLoading
@@ -388,16 +447,57 @@ public struct WebKitRepresentable: NSViewRepresentable {
                     guard let self = self else { return }
                     let urlStr = wv.url?.absoluteString ?? ""
                     self.parent.currentUrlString = urlStr
+                    AppState.shared.notifyUrlChanged(sourceAppId: self.parent.app.id, newUrlString: urlStr)
                     if let title = wv.title, !title.isEmpty, !urlStr.isEmpty {
+                        let detected = AppState.shared.app(for: urlStr)
                         AppState.shared.recordRecentDocument(
-                            appId: self.parent.app.id,
-                            appName: self.parent.app.name,
+                            appId: detected?.id ?? self.parent.app.id,
+                            appName: detected?.name ?? self.parent.app.name,
                             title: title,
                             urlString: urlStr
                         )
                     }
                 }
             })
+        }
+        
+        @MainActor
+        public func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            if let urlStr = webView.url?.absoluteString {
+                parent.currentUrlString = urlStr
+                AppState.shared.notifyUrlChanged(sourceAppId: parent.app.id, newUrlString: urlStr)
+            }
+            parent.isLoading = false
+            parent.isOfflineError = false
+        }
+        
+        @MainActor
+        public func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+            handleNavigationFailure(error: error, in: webView)
+        }
+        
+        @MainActor
+        public func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+            handleNavigationFailure(error: error, in: webView)
+        }
+        
+        @MainActor
+        private func handleNavigationFailure(error: Error, in webView: WKWebView) {
+            let nsError = error as NSError
+            if nsError.code == NSURLErrorCancelled {
+                return // User cancelled or navigation redirected
+            }
+            
+            // Check for network disconnection or offline unreachable status
+            if nsError.code == NSURLErrorNotConnectedToInternet ||
+               nsError.code == NSURLErrorCannotFindHost ||
+               nsError.code == NSURLErrorCannotConnectToHost ||
+               nsError.code == NSURLErrorNetworkConnectionLost ||
+               nsError.code == NSURLErrorTimedOut ||
+               OfflineManager.shared.isOffline {
+                parent.isOfflineError = true
+            }
+            parent.isLoading = false
         }
         
         @MainActor
@@ -483,7 +583,7 @@ public struct WebKitRepresentable: NSViewRepresentable {
             return nil
         }
         
-        // MARK: - WKScriptMessageHandler (Native Printing)
+        // MARK: - WKScriptMessageHandler (Native Printing & Offline Extension Bridge)
         public func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
             if message.name == "printHandler" {
                 Task { @MainActor in
@@ -491,6 +591,8 @@ public struct WebKitRepresentable: NSViewRepresentable {
                         AppState.shared.runNativePrintOperation(for: webView)
                     }
                 }
+            } else if message.name == "offlineExtensionReady" {
+                // Google Docs Offline Extension Shim active and ready
             }
         }
     }
