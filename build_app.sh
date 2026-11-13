@@ -43,6 +43,18 @@ if [ -d "Resources/Images" ]; then
     cp -r Resources/Images/* "${RESOURCES_DIR}/Images/"
 fi
 
+# Copy OfflineShells
+mkdir -p "${RESOURCES_DIR}/OfflineShells"
+if [ -d "Resources/OfflineShells" ]; then
+    cp -r Resources/OfflineShells/* "${RESOURCES_DIR}/OfflineShells/"
+fi
+
+# Copy Extensions
+mkdir -p "${RESOURCES_DIR}/Extensions"
+if [ -d "Extensions" ]; then
+    cp -r Extensions/* "${RESOURCES_DIR}/Extensions/"
+fi
+
 # Write Info.plist
 cat <<EOF > "${CONTENTS_DIR}/Info.plist"
 <?xml version="1.0" encoding="UTF-8"?>

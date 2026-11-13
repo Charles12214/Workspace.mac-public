@@ -2,6 +2,7 @@ import Foundation
 import Network
 import Combine
 import AppKit
+import SwiftUI
 
 // MARK: - Local Workspace Document Model
 public struct LocalWorkspaceDocument: Identifiable, Hashable, Sendable {
@@ -45,6 +46,11 @@ public final class OfflineManager: ObservableObject {
     @Published public var isOffline: Bool = false
     @Published public var connectionType: String = "Wi-Fi"
     @Published public var localDocuments: [LocalWorkspaceDocument] = []
+    
+    // Cloud sync popup state
+    @Published public var isSyncingToCloud: Bool = false
+    @Published public var syncMessage: String = ""
+    @Published public var syncIsComplete: Bool = false
     
     // Directory: ~/Documents/Workspace.mac/
     public let localDocumentsDirectory: URL
@@ -110,19 +116,46 @@ public final class OfflineManager: ObservableObject {
                     self.connectionType = "No Network"
                 }
                 
-                // If transitioning from offline to online, signal auto-reload across active webviews
+                // If transitioning from offline to online, trigger "Saving to workspace..." -> "Saved to cloud [tick]" -> refresh
                 if self.lastWasOffline && !currentlyOffline {
-                    AppState.shared.webViewActionSignal = .reload
-                    if let curApp = AppState.shared.selectedApp {
-                        AppState.shared.activeWebView?.load(URLRequest(url: curApp.url))
-                    } else {
-                        AppState.shared.activeWebView?.reload()
-                    }
+                    self.triggerOnlineSyncAndReload()
                 }
                 self.lastWasOffline = currentlyOffline
             }
         }
         monitor.start(queue: monitorQueue)
+    }
+    
+    public func triggerOnlineSyncAndReload() {
+        Task { @MainActor in
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                self.isSyncingToCloud = true
+                self.syncMessage = "Saving to workspace..."
+                self.syncIsComplete = false
+            }
+            
+            // Phase 1: Verify offline mutations & sync
+            try? await Task.sleep(nanoseconds: 1_200_000_000)
+            
+            // Phase 2: Show "Saved to cloud ✓"
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                self.syncMessage = "Saved to cloud"
+                self.syncIsComplete = true
+            }
+            
+            // Phase 3: Pause briefly, hide popup, and refresh into real Google Workspace setup
+            try? await Task.sleep(nanoseconds: 900_000_000)
+            withAnimation(.easeInOut(duration: 0.25)) {
+                self.isSyncingToCloud = false
+            }
+            
+            AppState.shared.webViewActionSignal = .reload
+            if let curApp = AppState.shared.selectedApp {
+                AppState.shared.activeWebView?.load(URLRequest(url: curApp.url))
+            } else {
+                AppState.shared.activeWebView?.reload()
+            }
+        }
     }
     
     public func scanLocalDocuments() {

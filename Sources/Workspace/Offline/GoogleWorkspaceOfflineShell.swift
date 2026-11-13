@@ -9,6 +9,28 @@ public struct GoogleWorkspaceOfflineShell {
     
     @MainActor
     public static func html(for app: WorkspaceAppItem, userName: String, userEmail: String) -> String {
+        let fileName: String
+        switch app.id {
+        case "sheets": fileName = "sheets.html"
+        case "slides": fileName = "slides.html"
+        case "drive": fileName = "drive.html"
+        default: fileName = "docs.html"
+        }
+        
+        // 1. Try App Bundle Resources/OfflineShells/
+        if let bundleUrl = Bundle.main.url(forResource: (fileName as NSString).deletingPathExtension, withExtension: "html", subdirectory: "OfflineShells"),
+           let content = try? String(contentsOf: bundleUrl, encoding: .utf8), !content.isEmpty {
+            return content
+        }
+        
+        // 2. Try working directory Resources/OfflineShells/
+        let workingDirFile = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .appendingPathComponent("Resources/OfflineShells")
+            .appendingPathComponent(fileName)
+        if let content = try? String(contentsOf: workingDirFile, encoding: .utf8), !content.isEmpty {
+            return content
+        }
+        
         let appName = app.name
         let appColor: String
         let appIconSvg: String

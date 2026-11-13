@@ -6,6 +6,7 @@ public struct WorkspaceWebView: View {
     public let app: WorkspaceAppItem
     public let onReturnHome: () -> Void
     
+    @ObservedObject private var offlineManager = OfflineManager.shared
     @State private var webView: WKWebView? = nil
     @State private var canGoBack: Bool = false
     @State private var canGoForward: Bool = false
@@ -36,8 +37,48 @@ public struct WorkspaceWebView: View {
             )
             .ignoresSafeArea()
             
+            // MARK: - Reconnection Cloud Sync Popup ("Saving to workspace..." -> "Saved to cloud [tick]" -> refresh)
+            if offlineManager.isSyncingToCloud {
+                VStack {
+                    HStack(spacing: 10) {
+                        if offlineManager.syncIsComplete {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 16, weight: .bold))
+                                .foregroundStyle(Color(hex: "34A853"))
+                        } else {
+                            ProgressView()
+                                .scaleEffect(0.75)
+                                .frame(width: 16, height: 16)
+                        }
+                        
+                        Text(offlineManager.syncMessage)
+                            .font(.system(size: 13, weight: .bold, design: .rounded))
+                            .foregroundStyle(Color.primary)
+                    }
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 10)
+                    .background(.ultraThinMaterial)
+                    .clipShape(Capsule())
+                    .overlay(
+                        Capsule().stroke(
+                            offlineManager.syncIsComplete
+                                ? Color(hex: "34A853").opacity(0.4)
+                                : Color.primary.opacity(0.15),
+                            lineWidth: 1
+                        )
+                    )
+                    .shadow(color: Color.black.opacity(0.22), radius: 12, y: 4)
+                    .padding(.top, 14)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity)
+                .zIndex(30)
+            }
+            
             // MARK: - Ambient Offline Status Pill
-            if OfflineManager.shared.isOffline {
+            if OfflineManager.shared.isOffline && !offlineManager.isSyncingToCloud {
                 VStack {
                     HStack(spacing: 8) {
                         Image(systemName: "wifi.slash")

@@ -372,8 +372,29 @@ public struct TiledAppPaneView: View {
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 
-                // Ambient Offline Indicator in multi-pane
-                if OfflineManager.shared.isOffline {
+                // Ambient Offline or Sync Indicator in multi-pane
+                if OfflineManager.shared.isSyncingToCloud {
+                    HStack(spacing: 6) {
+                        if OfflineManager.shared.syncIsComplete {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(Color(hex: "34A853"))
+                        } else {
+                            ProgressView()
+                                .scaleEffect(0.65)
+                                .frame(width: 12, height: 12)
+                        }
+                        Text(OfflineManager.shared.syncMessage)
+                            .font(.system(size: 10.5, weight: .bold, design: .rounded))
+                            .foregroundStyle(Color.primary)
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(.ultraThinMaterial)
+                    .clipShape(Capsule())
+                    .overlay(Capsule().stroke(OfflineManager.shared.syncIsComplete ? Color(hex: "34A853").opacity(0.4) : Color.primary.opacity(0.12), lineWidth: 1))
+                    .padding(.top, 6)
+                } else if OfflineManager.shared.isOffline {
                     HStack(spacing: 5) {
                         Image(systemName: "wifi.slash")
                             .font(.system(size: 9, weight: .bold))

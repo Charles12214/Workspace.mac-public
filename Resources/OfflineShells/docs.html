@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Google Docs</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --app-color: #1A73E8;
+            --bg-color: #ffffff;
+            --card-bg: #f8fafd;
+            --text-primary: #202124;
+            --text-secondary: #5f6368;
+            --border-color: #dadce0;
+            --hover-bg: #f1f3f4;
+            --active-bg: #e8f0fe;
+            --search-bg: #edf2fc;
+            --paper-bg: #ffffff;
+        }
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg-color: #1f1f1f;
+                --card-bg: #28292a;
+                --text-primary: #e8eaed;
+                --text-secondary: #9aa0a6;
+                --border-color: #3c4043;
+                --hover-bg: #2d2e30;
+                --active-bg: #1e3a5f;
+                --search-bg: #2b2d30;
+                --paper-bg: #1f1f1f;
+            }
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+        body {
+            font-family: "Google Sans", "Roboto", -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+        }
+
+        /* Google Docs App Bar */
+        header.gb_Wd {
+            height: 64px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            padding: 0 16px;
+            gap: 16px;
+            flex-shrink: 0;
+            background-color: var(--bg-color);
+        }
+        .gb_nav_btn {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            color: var(--text-secondary);
+        }
+        .gb_nav_btn:hover { background-color: var(--hover-bg); }
+        .gb_logo_area {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+        }
+        .gb_title {
+            font-size: 22px;
+            font-weight: 500;
+            color: var(--text-primary);
+            letter-spacing: -0.3px;
+        }
+
+        /* Search Bar */
+        .gb_search_wrap {
+            flex: 1;
+            max-width: 720px;
+            margin: 0 auto;
+            position: relative;
+        }
+        .gb_search_input {
+            width: 100%;
+            height: 46px;
+            background-color: var(--search-bg);
+            border: 1px solid transparent;
+            border-radius: 24px;
+            padding: 0 16px 0 48px;
+            font-size: 15px;
+            font-family: inherit;
+            color: var(--text-primary);
+            outline: none;
+            transition: all 0.2s ease;
+        }
+        .gb_search_input:focus {
+            background-color: var(--bg-color);
+            border-color: var(--border-color);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+        }
+        .gb_search_icon {
+            position: absolute;
+            left: 16px;
+            top: 13px;
+            color: var(--text-secondary);
+            pointer-events: none;
+        }
+
+        /* Right Header Controls */
+        .gb_right {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .gb_offline_badge {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            font-weight: 500;
+            color: #137333;
+            background-color: #e6f4ea;
+            padding: 5px 12px;
+            border-radius: 14px;
+        }
+        @media (prefers-color-scheme: dark) {
+            .gb_offline_badge {
+                background-color: rgba(52, 168, 83, 0.15);
+                color: #81c995;
+            }
+        }
+        .gb_avatar {
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            background-color: #1A73E8;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        /* Templates Strip (Start a new document) */
+        .docs_templates_strip {
+            background-color: var(--card-bg);
+            padding: 24px 32px 32px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .docs_strip_inner {
+            max-width: 980px;
+            margin: 0 auto;
+        }
+        .docs_strip_header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+            font-size: 15px;
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+        .docs_templates_grid {
+            display: flex;
+            gap: 20px;
+        }
+        .docs_template_card {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 8px;
+            cursor: pointer;
+        }
+        .docs_template_thumb {
+            width: 130px;
+            height: 165px;
+            background-color: var(--bg-color);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+        .docs_template_card:hover .docs_template_thumb {
+            border-color: #1A73E8;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+            transform: translateY(-2px);
+        }
+        .docs_template_title {
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+
+        /* Recent Documents Section */
+        .docs_main_container {
+            flex: 1;
+            max-width: 980px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 24px 32px;
+            overflow-y: auto;
+        }
+        .docs_recent_header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+            font-size: 15px;
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+        .docs_filter_actions {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            color: var(--text-secondary);
+            font-size: 13px;
+        }
+        .docs_col_headers {
+            display: grid;
+            grid-template-columns: 1fr 180px 180px 48px;
+            padding: 10px 16px;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        /* Document Table Rows */
+        .docs_item_row {
+            display: grid;
+            grid-template-columns: 1fr 180px 180px 48px;
+            align-items: center;
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border-color);
+            cursor: pointer;
+            transition: background 0.15s ease;
+            border-radius: 4px;
+        }
+        .docs_item_row:hover {
+            background-color: var(--hover-bg);
+        }
+        .docs_item_title {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+        .docs_item_name {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+        .docs_item_owner, .docs_item_date {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+        .docs_item_menu {
+            color: var(--text-secondary);
+            text-align: right;
+            padding-right: 8px;
+        }
+
+        /* Empty state */
+        .docs_empty {
+            text-align: center;
+            padding: 80px 20px;
+            color: var(--text-secondary);
+        }
+
+        /* Fullscreen In-App Google Docs Editor */
+        #editorOverlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: var(--bg-color);
+            z-index: 2000;
+            flex-direction: column;
+        }
+        .docs_editor_topbar {
+            height: 64px;
+            display: flex;
+            align-items: center;
+            padding: 0 16px;
+            gap: 12px;
+            border-bottom: 1px solid var(--border-color);
+            background-color: var(--bg-color);
+        }
+        .docs_editor_title_box {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        .docs_editor_title_input {
+            font-family: inherit;
+            font-size: 18px;
+            font-weight: 500;
+            color: var(--text-primary);
+            background: transparent;
+            border: 1px solid transparent;
+            border-radius: 4px;
+            padding: 2px 6px;
+            outline: none;
+        }
+        .docs_editor_title_input:focus, .docs_editor_title_input:hover {
+            border-color: var(--border-color);
+        }
+        .docs_editor_menus {
+            display: flex;
+            gap: 12px;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+        .docs_editor_menus span { cursor: pointer; }
+        .docs_editor_menus span:hover { color: var(--text-primary); }
+
+        /* Formatting Toolbar */
+        .docs_editor_toolbar {
+            height: 40px;
+            background-color: var(--card-bg);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            padding: 0 16px;
+            gap: 6px;
+        }
+        .tool_btn {
+            height: 28px;
+            padding: 0 8px;
+            border-radius: 4px;
+            border: none;
+            background: transparent;
+            color: var(--text-primary);
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .tool_btn:hover { background-color: var(--hover-bg); }
+        .tool_sep {
+            width: 1px;
+            height: 18px;
+            background-color: var(--border-color);
+            margin: 0 4px;
+        }
+
+        /* Document Canvas Page */
+        .docs_canvas_wrapper {
+            flex: 1;
+            background-color: var(--card-bg);
+            overflow-y: auto;
+            padding: 32px 16px;
+            display: flex;
+            justify-content: center;
+        }
+        .docs_paper {
+            width: 100%;
+            max-width: 816px;
+            min-height: 1056px;
+            background-color: var(--paper-bg);
+            border: 1px solid var(--border-color);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            padding: 72px 96px;
+            font-size: 15px;
+            line-height: 1.6;
+            color: var(--text-primary);
+            outline: none;
+            user-select: text;
+        }
+    </style>
+</head>
+<body>
+    <!-- Real Google Docs Header Bar -->
+    <header class="gb_Wd">
+        <div class="gb_nav_btn" onclick="location.reload()" title="Main menu">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z" fill="currentColor"/></svg>
+        </div>
+        <div class="gb_logo_area" onclick="location.reload()">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
+                <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z" fill="#1A73E8"/>
+            </svg>
+            <span class="gb_title">Docs</span>
+        </div>
+        
+        <div class="gb_search_wrap">
+            <svg class="gb_search_icon" width="20" height="20" viewBox="0 0 24 24" fill="none">
+                <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" fill="currentColor"/>
+            </svg>
+            <input type="text" class="gb_search_input" id="searchBox" placeholder="Search" oninput="filterDocs(this.value)">
+        </div>
+
+        <div class="gb_right">
+            <div class="gb_offline_badge" title="Offline ready via Workspace Docs Offline extension">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM10 17l-3.5-3.5 1.41-1.41L10 14.17l5.59-5.59L17 10l-7 7z" fill="currentColor"/></svg>
+                <span>Offline</span>
+            </div>
+            <div class="gb_avatar">C</div>
+        </div>
+    </header>
+
+    <!-- Start a new document Strip -->
+    <div class="docs_templates_strip">
+        <div class="docs_strip_inner">
+            <div class="docs_strip_header">
+                <span>Start a new document</span>
+            </div>
+            <div class="docs_templates_grid">
+                <div class="docs_template_card" onclick="createNewDoc()">
+                    <div class="docs_template_thumb">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none">
+                            <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" fill="#1A73E8"/>
+                        </svg>
+                    </div>
+                    <span class="docs_template_title">Blank document</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Documents List -->
+    <div class="docs_main_container">
+        <div class="docs_recent_header">
+            <span>Recent documents</span>
+            <div class="docs_filter_actions">
+                <span>Owned by anyone ▾</span>
+                <span>Last opened by me</span>
+            </div>
+        </div>
+        <div class="docs_col_headers">
+            <span>Title</span>
+            <span>Owned by</span>
+            <span>Last opened by me</span>
+            <span></span>
+        </div>
+        <div id="docsListTable">
+            <!-- Dynamically populated from IndexedDB and local storage -->
+        </div>
+    </div>
+
+    <!-- Fullscreen Google Docs Canvas / Editor -->
+    <div id="editorOverlay">
+        <div class="docs_editor_topbar">
+            <div class="gb_nav_btn" onclick="closeEditor()" title="Return to Docs home">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" fill="currentColor"/></svg>
+            </div>
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+                <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z" fill="#1A73E8"/>
+            </svg>
+            <div class="docs_editor_title_box">
+                <input type="text" class="docs_editor_title_input" id="editorTitleInput" value="Untitled document" oninput="saveCurrentDoc()">
+                <div class="docs_editor_menus">
+                    <span>File</span>
+                    <span>Edit</span>
+                    <span>View</span>
+                    <span>Insert</span>
+                    <span>Format</span>
+                    <span>Tools</span>
+                </div>
+            </div>
+            <div style="flex: 1;"></div>
+            <div class="gb_offline_badge">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM10 17l-3.5-3.5 1.41-1.41L10 14.17l5.59-5.59L17 10l-7 7z" fill="currentColor"/></svg>
+                <span id="saveLabel">Saved to device</span>
+            </div>
+        </div>
+
+        <div class="docs_editor_toolbar">
+            <button class="tool_btn" onclick="document.execCommand('undo')" title="Undo">↶</button>
+            <button class="tool_btn" onclick="document.execCommand('redo')" title="Redo">↷</button>
+            <button class="tool_btn" onclick="window.print()" title="Print">⎙</button>
+            <div class="tool_sep"></div>
+            <button class="tool_btn" onclick="document.execCommand('bold')"><b>B</b></button>
+            <button class="tool_btn" onclick="document.execCommand('italic')"><i>I</i></button>
+            <button class="tool_btn" onclick="document.execCommand('underline')"><u>U</u></button>
+            <div class="tool_sep"></div>
+            <button class="tool_btn" onclick="document.execCommand('justifyLeft')">Left</button>
+            <button class="tool_btn" onclick="document.execCommand('justifyCenter')">Center</button>
+            <button class="tool_btn" onclick="document.execCommand('justifyRight')">Right</button>
+            <div class="tool_sep"></div>
+            <button class="tool_btn" onclick="document.execCommand('insertUnorderedList')">• Bulleted</button>
+            <button class="tool_btn" onclick="document.execCommand('insertOrderedList')">1. Numbered</button>
+        </div>
+
+        <div class="docs_canvas_wrapper">
+            <div class="docs_paper" id="editorCanvas" contenteditable="true" oninput="saveCurrentDoc()"></div>
+        </div>
+    </div>
+
+    <script>
+        let activeDocId = null;
+        const DEFAULT_DOCS = [
+            { id: "doc_1", title: "(NEW) Music tech book Y12", owner: "me", date: "12 Nov 2026", content: "<h1>(NEW) Music tech book Y12</h1><p>Lesson notes and audio synthesis review.</p>" },
+            { id: "doc_2", title: "Methods of transmission 26", owner: "me", date: "12 Nov 2026", content: "<h1>Methods of transmission 26</h1><p>Wired, wireless, packet switching and protocol stacks.</p>" },
+            { id: "doc_3", title: "Network Hardware Worksheet", owner: "me", date: "12 Nov 2026", content: "<h1>Network Hardware Worksheet</h1><p>Routers, switches, NICs and bridges overview.</p>" },
+            { id: "doc_4", title: "44 Data Collection User Interfaces Worksheet", owner: "me", date: "12 Nov 2026", content: "<h1>Data Collection User Interfaces</h1><p>UI design considerations and accessibility patterns.</p>" },
+            { id: "doc_5", title: "42 Data Sources Worksheet", owner: "me", date: "12 Nov 2026", content: "<h1>Data Sources Worksheet</h1><p>Primary vs secondary data acquisition methods.</p>" }
+        ];
+
+        function loadDocs() {
+            let docs = JSON.parse(localStorage.getItem("workspace_offline_docs") || "null");
+            if (!docs || docs.length === 0) {
+                docs = DEFAULT_DOCS;
+                localStorage.setItem("workspace_offline_docs", JSON.stringify(docs));
+            }
+            renderDocs(docs);
+        }
+
+        function renderDocs(docs) {
+            const table = document.getElementById("docsListTable");
+            if (!docs || docs.length === 0) {
+                table.innerHTML = '<div class="docs_empty">No offline documents found</div>';
+                return;
+            }
+            let html = "";
+            docs.forEach(doc => {
+                html += `
+                <div class="docs_item_row" onclick="openDoc('${doc.id}')">
+                    <div class="docs_item_title">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                            <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z" fill="#1A73E8"/>
+                        </svg>
+                        <span class="docs_item_name">${doc.title}</span>
+                    </div>
+                    <div class="docs_item_owner">${doc.owner || "me"}</div>
+                    <div class="docs_item_date">${doc.date || "Today"}</div>
+                    <div class="docs_item_menu">⋮</div>
+                </div>
+                `;
+            });
+            table.innerHTML = html;
+        }
+
+        function filterDocs(query) {
+            const q = query.toLowerCase();
+            const docs = JSON.parse(localStorage.getItem("workspace_offline_docs") || "[]");
+            const filtered = docs.filter(d => d.title.toLowerCase().includes(q));
+            renderDocs(filtered);
+        }
+
+        function createNewDoc() {
+            const newId = "doc_" + Date.now();
+            const newDoc = {
+                id: newId,
+                title: "Untitled document",
+                owner: "me",
+                date: "Today",
+                content: "<p>Start typing...</p>"
+            };
+            const docs = JSON.parse(localStorage.getItem("workspace_offline_docs") || "[]");
+            docs.unshift(newDoc);
+            localStorage.setItem("workspace_offline_docs", JSON.stringify(docs));
+            openDoc(newId);
+        }
+
+        function openDoc(id) {
+            activeDocId = id;
+            const docs = JSON.parse(localStorage.getItem("workspace_offline_docs") || "[]");
+            const doc = docs.find(d => d.id === id);
+            if (!doc) return;
+            document.getElementById("editorTitleInput").value = doc.title;
+            document.getElementById("editorCanvas").innerHTML = doc.content || "<p></p>";
+            document.getElementById("editorOverlay").style.display = "flex";
+        }
+
+        function closeEditor() {
+            document.getElementById("editorOverlay").style.display = "none";
+            loadDocs();
+        }
+
+        function saveCurrentDoc() {
+            if (!activeDocId) return;
+            const title = document.getElementById("editorTitleInput").value;
+            const content = document.getElementById("editorCanvas").innerHTML;
+            const docs = JSON.parse(localStorage.getItem("workspace_offline_docs") || "[]");
+            const idx = docs.findIndex(d => d.id === activeDocId);
+            if (idx >= 0) {
+                docs[idx].title = title;
+                docs[idx].content = content;
+                docs[idx].date = "Today";
+                localStorage.setItem("workspace_offline_docs", JSON.stringify(docs));
+            }
+            
+            // Post to extension background
+            if (window.chrome && window.chrome.runtime && window.chrome.runtime.sendMessage) {
+                window.chrome.runtime.sendMessage({
+                    type: "saveDocument",
+                    document: { id: activeDocId, title: title, contentSnapshot: content }
+                });
+            }
+        }
+
+        window.onload = loadDocs;
+    </script>
+</body>
+</html>
