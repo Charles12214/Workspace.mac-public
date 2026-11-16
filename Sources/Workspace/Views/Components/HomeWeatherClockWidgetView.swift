@@ -19,12 +19,12 @@ public struct HomeWeatherClockWidgetView: View {
                     if service.isWeatherEnabled, let weather = service.weatherInfo {
                         ZStack {
                             Circle()
-                                .fill(weatherSymbolColor(weather.symbolName).opacity(0.16))
+                                .fill(WeatherService.symbolColor(for: weather.symbolName).opacity(0.16))
                                 .frame(width: 52, height: 52)
                             
                             Image(systemName: weather.symbolName)
                                 .font(.system(size: 26, weight: .semibold))
-                                .foregroundStyle(weatherSymbolColor(weather.symbolName))
+                                .foregroundStyle(WeatherService.symbolColor(for: weather.symbolName))
                         }
                     } else if service.isLoadingWeather {
                         ZStack {
@@ -180,11 +180,14 @@ public struct HomeWeatherClockWidgetView: View {
                 .help("Refresh Weather")
             }
             
+            // Quick Location Switcher (when 2+ locations saved)
+            WeatherLocationSwitcherStrip()
+            
             if let weather = service.weatherInfo {
                 HStack(spacing: 14) {
                     Image(systemName: weather.symbolName)
                         .font(.system(size: 28))
-                        .foregroundStyle(weatherSymbolColor(weather.symbolName))
+                        .foregroundStyle(WeatherService.symbolColor(for: weather.symbolName))
                     
                     VStack(alignment: .leading, spacing: 1) {
                         Text("\(weather.formattedTemp)\(service.temperatureUnit.symbol)")
@@ -212,7 +215,7 @@ public struct HomeWeatherClockWidgetView: View {
                                             .foregroundStyle(.secondary)
                                         Image(systemName: hour.symbolName)
                                             .font(.system(size: 14))
-                                            .foregroundStyle(weatherSymbolColor(hour.symbolName))
+                                            .foregroundStyle(WeatherService.symbolColor(for: hour.symbolName))
                                             .frame(height: 16)
                                         Text("\(hour.temperature)°")
                                             .font(.system(size: 11, weight: .bold, design: .rounded))
@@ -242,23 +245,5 @@ public struct HomeWeatherClockWidgetView: View {
         }
         .padding(16)
         .frame(width: 380)
-    }
-    
-    private func weatherSymbolColor(_ name: String) -> Color {
-        if name.contains("sun.max") {
-            return Color(hex: "F4B400")
-        } else if name.contains("sun") {
-            return Color(hex: "FBBC04")
-        } else if name.contains("rain") || name.contains("drizzle") {
-            return Color(hex: "1A73E8")
-        } else if name.contains("snow") || name.contains("snowflake") {
-            return Color(hex: "00A4F9")
-        } else if name.contains("bolt") {
-            return Color(hex: "EA4335")
-        } else if name.contains("moon") {
-            return Color(hex: "9B51E0")
-        } else {
-            return Color.secondary
-        }
     }
 }

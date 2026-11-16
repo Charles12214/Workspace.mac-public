@@ -10,11 +10,10 @@ A fast, lightweight, distraction-free native macOS client for **Google Workspace
 
 With version **V1.3.0**, Workspace.mac is **100% open-source**. When a desktop app requests system permissions, users deserve complete transparency.
 
-- **Location Permission for Ambient Weather:**
-  - Workspace.mac includes an optional ambient weather and local clock widget.
-  - When enabled, it requests macOS Location permission solely to query the free, open [Open-Meteo](https://open-meteo.com) API for local temperature and conditions.
-  - **Your coordinates are never stored, logged, tracked, or sent to any server.**
-  - **Completely Optional:** Weather can be skipped during onboarding or toggled off anytime in Settings.
+- **Location Permission & Encrypted Weather Vault:**
+  - Weather defaults to **Off** so Workspace.mac never prompts for Location permission until you opt in.
+  - When enabled, it uses the free, open [Open-Meteo](https://open-meteo.com) API for local temperature and forecasts.
+  - Saved GPS coordinates and up to **5 manually added weather cities** are encrypted at rest with AES-256-GCM (Apple CryptoKit) in a `0700`/`0600` sandboxed vault inside `~/Library/Application Support/Workspace.mac/SecureLocationVault/` (avoiding Keychain ACL prompts across local open-source rebuilds) so app updates never ask for Location permission again.
 - **Zero Telemetry & Zero Trackers:**
   - No analytics SDKs, no event trackers, no user fingerprinting, and no background pings.
 - **Local Sandboxed Authentication:**
@@ -25,26 +24,34 @@ With version **V1.3.0**, Workspace.mac is **100% open-source**. When a desktop a
 ## ✨ Features at a Glance
 
 - **18 Unified Workspace Apps**: Docs, Sheets, Slides, Drive, Gmail, Calendar, Meet, Chat, Keep, NotebookLM, Forms, Sites, Contacts, Tasks, Classroom, Cloud, Admin, and Gemini.
+- **OfflineSuite.mac (True Offline Google Docs & In-Place Sync)**:
+  - Native Swift WebKit extension bridge enabling real offline Google Docs editing inside your local IndexedDB store (Google Slides offline compatibility arrives in **V1.3.1**, and Google Sheets offline compatibility arrives in **V1.3.2**).
+  - Seamlessly reconnects and syncs local offline edits straight back to Google Drive without interrupting or redirecting your open document.
+- **Dynamic Weather Atmosphere (Home Background)**:
+  - Optional weather-reactive `Canvas` sky backdrop on the Home screen: warm top-right yellow glow on clear skies, drifting mist/clouds for fog, falling droplets for rain & thunderstorms, falling flurries for snow, and fading dendritic frost crystals in freezing conditions.
+- **Ambient Weather & Local Time Dashboard**:
+  - Live clock and weather readout in the top bar and Home dashboard.
+  - Store and switch between up to 5 encrypted weather locations, with an hourly forecast popover.
+  - 100% private, default-off, and battery-friendly.
 - **Multi-App Tiling & "Groups" (Up to 4 Apps)**:
   - Drag and drop apps from the sidebar onto split-screen drop zones (2, 3, or 4 panes).
   - Save multi-window layouts as **Groups** directly onto your Home dashboard.
   - Native macOS File menu integration (`⌘S`, `⇧⌘S`, `⇧⌘R`, `⌥⌘W`) with dynamic state handling.
   - Double-click inline group renaming on Home.
   - Persistent `WebKitPool` and `WebKitHostView` architecture ensuring zero reloads or lost edits when moving or resizing panes.
-- **Ambient Weather & Local Time Dashboard**:
-  - Live clock and weather readout in the top bar and Home dashboard.
-  - Multi-hour forecast popover with high/low temperatures.
-  - 100% private, optional, and battery-friendly.
 - **Gemini AI Integration**: Dedicated Gemini assistant view, customized AI Tier badges (Plus, Pro, Ultra), and ambient avatar gradient rings.
-- **3 Adaptive Layout Modes**:
+- **4 Adaptive Layout Modes**:
   - **Everything**: Docked sidebar + top navigation bar.
   - **Essentials**: Compact top navigation bar only, with quick sidebar access.
-  - **At a glance**: Edge-to-edge fullscreen immersion with top-middle hover controls and a draggable bookmark tab.
+  - **At a glance (Minimalist)**: Edge-to-edge fullscreen immersion with top-middle hover controls and a draggable bookmark tab.
+  - **Separated Apps**: Launch Workspace apps into independent standalone macOS windows.
+- **Tabbed Settings (`⌘,`) & Customizable Home Dashboard**:
+  - Side-tabbed Settings panel (`General`, `Home Screen`, `Appearance`, `Weather & Clock`, `Accounts & Profile`, `Offline & Privacy`, `Updates & About`).
+  - Collapsible sections (with **Continue Where You Left Off** always accessible), per-section visibility toggles, automatic hiding for empty **Pinned Apps** and **Groups**, quick search, and compact icon-only tile mode.
 - **True macOS Appearance**: Real-time automatic Light/Dark mode detection matching your Mac's system appearance.
-- **Local Workspace Profile**: Personalized First/Last/Nickname greeting engine with animated letter-by-letter blur transitions, custom avatar photos, and multi-account switcher (up to 5 accounts).
+- **Local Workspace Profile**: Personalized First/Last/Nickname greeting engine with animated letter-by-letter blur transitions, custom avatar photos, and multi-account switcher (up to 5 isolated accounts).
 - **Authentic Google Sign-In**: Powered by Apple's sandboxed WebKit container. Passwords, 2FA, and sessions are processed directly by Google. Logging in once keeps you signed in across all apps.
 - **Biometric Security**: Built-in Touch ID and Apple Secure Enclave passkey protection.
-- **Collapsible Dashboard**: Quick search, customizable Pinned apps, Saved Groups, and collapsible Recently Used drawer.
 
 ---
 
@@ -80,4 +87,4 @@ cd Workspace.mac
 
 ## 📄 License
 
-Distributed under the **MIT License**. See [`LICENSE`](file:///Users/charliecserfalvi-smith/Library/CloudStorage/GoogleDrive-ccserfalvismith@gmail.com/My%20Drive/Workspace%20(APP)/LICENSE) for more information.
+Distributed under the **MIT License**. See [`LICENSE`](LICENSE) for more information.

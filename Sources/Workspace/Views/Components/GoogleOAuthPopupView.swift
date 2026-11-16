@@ -226,14 +226,14 @@ public struct GoogleOAuthPopupView: View {
     }
 }
 
-// Dedicated WebView for OAuth login using genuine Safari User-Agent
+// Dedicated WebView for OAuth login using genuine Safari User-Agent and the active account's cookie store.
 public struct OAuthWebViewRepresentable: NSViewRepresentable {
     public func makeNSView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
-        config.websiteDataStore = WKWebsiteDataStore.default()
+        config.websiteDataStore = AppState.shared.activeDataStore
         let wv = WKWebView(frame: .zero, configuration: config)
         // Authentic Safari User-Agent prevents "This browser or app may not be secure"
-        wv.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.3 Safari/605.1.15"
+        wv.customUserAgent = WebKitRepresentable.safariAuthUserAgent
         
         let url = URL(string: "https://accounts.google.com/ServiceLogin")!
         wv.load(URLRequest(url: url))

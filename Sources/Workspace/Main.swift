@@ -14,6 +14,13 @@ struct WorkspaceApp: App {
         .windowToolbarStyle(.unified(showsTitle: false))
         .commands {
             SidebarCommands()
+            CommandGroup(replacing: .appSettings) {
+                Button("Settings...") {
+                    state.showingSettings = true
+                }
+                .keyboardShortcut(",", modifiers: [.command])
+                .disabled(!state.hasCompletedSetup)
+            }
             CommandGroup(replacing: .newItem) {
                 Button("New Google Doc") {
                     if let app = state.apps.first(where: { $0.id == "docs" }) {
@@ -67,7 +74,7 @@ struct WorkspaceApp: App {
                 }
                 .keyboardShortcut("p", modifiers: [.command])
             }
-            CommandMenu("View") {
+            CommandGroup(after: .toolbar) {
                 Button("Zoom In") {
                     AppState.shared.zoomIn()
                 }
@@ -113,6 +120,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
+        
+        // Eagerly prewarm and cache Google Workspace offline shells
+        OfflineCacheService.shared.prewarmOfflineCache()
     }
     
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {

@@ -108,96 +108,6 @@ public final class OfflineManager: ObservableObject {
         let fm = FileManager.default
         if !fm.fileExists(atPath: localDocumentsDirectory.path) {
             try? fm.createDirectory(at: localDocumentsDirectory, withIntermediateDirectories: true, attributes: nil)
-            
-            // Seed a welcome offline guide document
-            seedWelcomeDocument()
-            seedUserWorkspaceDocuments()
-        }
-    }
-    
-    private func seedWelcomeDocument() {
-        let welcomePath = localDocumentsDirectory.appendingPathComponent("Welcome to Workspace Offline.txt")
-        if !FileManager.default.fileExists(atPath: welcomePath.path) {
-            let content = """
-            Welcome to Workspace.mac Total Offline Mode!
-            
-            This local folder (~/Documents/Workspace.mac/) stores your offline documents, quick notes, and files.
-            
-            Key Offline Features:
-            • Seamlessly create and edit rich text documents without an internet connection.
-            • Google Docs, Sheets, and Drive offline caching via the built-in offline extension shim.
-            • 1-click sync to Google Drive when back online.
-            
-            Workspace.mac • 100% Free & Open-Source
-            """
-            try? content.write(to: welcomePath, atomically: true, encoding: .utf8)
-        }
-    }
-    
-    private func seedUserWorkspaceDocuments() {
-        let musicBookPath = localDocumentsDirectory.appendingPathComponent("(NEW) Music tech book Y12.rtf")
-        if !FileManager.default.fileExists(atPath: musicBookPath.path) {
-            let content = """
-            Music Technology
-            
-            Charlie Cserfalvi-Smith
-            Y12
-            
-            ========================================
-            Document Sections & Syllabus:
-            
-            1. Heading & Overview
-            2. Music History
-               • Eras - Acoustic era
-               • Eras - Magnetic era
-               • Magnetic to digital shift
-            3. Audio Principles
-               • Wow & Flutter
-               • A/D conversion & digital audio
-               • MIDI
-               • Reverse Reverb
-            ========================================
-            """
-            let attrString = NSAttributedString(string: content, attributes: [
-                .font: NSFont.systemFont(ofSize: 15),
-                .foregroundColor: NSColor.textColor
-            ])
-            if let rtfData = try? attrString.data(from: NSRange(location: 0, length: attrString.length), documentAttributes: [.documentType: NSAttributedString.DocumentType.rtf]) {
-                try? rtfData.write(to: musicBookPath)
-            }
-        }
-        
-        // Seed recent tracked documents if none exist yet
-        if trackedDocuments.isEmpty {
-            let sampleTitles = [
-                "(NEW) Music tech book Y12",
-                "Methods of transmission 26",
-                "Network Hardware Worksheet",
-                "44 Data Collection User Interfaces Worksheet",
-                "42 Data Sources Worksheet",
-                "45 Moral and Ethical Issues Worksheet",
-                "41 Uses of Online Services Worksheet",
-                "33 Interacting with Online Communities Worksheet",
-                "35 External Threats to Data Worksheet",
-                "46 Legal Issues Worksheet",
-                "37 Impact of Data Threats Worksheet",
-                "43 Data Collection Methods Worksheet"
-            ]
-            let now = Date()
-            var seeded: [TrackedWorkspaceDocument] = []
-            for (idx, title) in sampleTitles.enumerated() {
-                seeded.append(TrackedWorkspaceDocument(
-                    id: "doc_tracked_\(idx)",
-                    title: title,
-                    type: "docs",
-                    url: "https://docs.google.com/document/",
-                    exportUrl: "",
-                    lastOpened: now.addingTimeInterval(Double(-idx * 3600)),
-                    localFilePath: title.contains("Music tech book") ? musicBookPath.path : nil
-                ))
-            }
-            self.trackedDocuments = seeded
-            persistTrackedDocuments()
         }
     }
     
@@ -218,14 +128,45 @@ public final class OfflineManager: ObservableObject {
                     self.connectionType = "No Network"
                 }
                 
-                // If transitioning from offline to online, trigger "Saving to workspace..." -> "Saved to cloud [tick]" -> refresh
-                if self.lastWasOffline && !currentlyOffline {
-                    self.triggerOnlineSyncAndReload()
-                }
-                self.lastWasOffline = currentlyOffline
+                // Notify active and pooled webviews and transition offline state immediately
+                self.applyNetworkState(currentlyOffline: currentlyOffline, fromWebView: false)
             }
         }
         monitor.start(queue: monitorQueue)
+    }
+    
+    /// Applies a network connectivity state change from NWPathMonitor or WebKit online/offline events.
+    public func applyNetworkState(currentlyOffline: Bool, fromWebView: Bool = false) {
+        let stateChanged = (self.isOffline != currentlyOffline)
+        if fromWebView && !stateChanged {
+            return
+        }
+        
+        let wasOffline = self.lastWasOffline
+        self.isOffline = currentlyOffline
+        self.lastWasOffline = currentlyOffline
+        
+        if stateChanged || !fromWebView {
+            self.notifyWebViewsNetworkState(offline: currentlyOffline)
+        }
+        
+        if wasOffline && !currentlyOffline {
+            self.triggerOnlineSyncAndReload()
+        }
+    }
+    
+    /// Dispatches online/offline events into live pages instead of reloading so active IndexedDB edits aren't lost on Wi-Fi drops.
+    private func notifyWebViewsNetworkState(offline: Bool) {
+        let flag = offline ? "true" : "false"
+        let eventName = offline ? "offline" : "online"
+        let js = "window.__offlineSuiteFromNative = true; try { window.__offlineSuiteNetworkOffline = \(flag); window.dispatchEvent(new Event('\(eventName)')); } finally { window.__offlineSuiteFromNative = false; }"
+        var targets = WebKitPool.shared.allWebViews
+        if let active = AppState.shared.activeWebView, !targets.contains(where: { $0 === active }) {
+            targets.append(active)
+        }
+        for wv in targets {
+            wv.evaluateJavaScript(js, completionHandler: nil)
+        }
     }
     
     public func triggerOnlineSyncAndReload() {
@@ -237,7 +178,7 @@ public final class OfflineManager: ObservableObject {
             }
             
             // Phase 1: Verify offline mutations & sync
-            try? await Task.sleep(nanoseconds: 1_200_000_000)
+            try? await Task.sleep(nanoseconds: 500_000_000)
             
             // Phase 2: Show "Saved to cloud ✓"
             withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
@@ -245,34 +186,35 @@ public final class OfflineManager: ObservableObject {
                 self.syncIsComplete = true
             }
             
-            // Phase 3: Pause briefly, hide popup, and refresh into real Google Workspace setup
-            try? await Task.sleep(nanoseconds: 900_000_000)
+            // Phase 3: Pause briefly, hide popup, and re-dispatch in-page online event without navigating away
+            try? await Task.sleep(nanoseconds: 450_000_000)
             withAnimation(.easeInOut(duration: 0.25)) {
                 self.isSyncingToCloud = false
             }
-            
-            AppState.shared.webViewActionSignal = .reload
-            if let curApp = AppState.shared.selectedApp {
-                AppState.shared.activeWebView?.load(URLRequest(url: curApp.url))
-            } else {
-                AppState.shared.activeWebView?.reload()
-            }
+            self.notifyWebViewsNetworkState(offline: false)
         }
     }
     
     public func scanLocalDocuments() {
         let fm = FileManager.default
-        guard let items = try? fm.contentsOfDirectory(at: localDocumentsDirectory, includingPropertiesForKeys: [.fileSizeKey, .contentModificationDateKey], options: [.skipsHiddenFiles]) else {
+        guard let items = try? fm.contentsOfDirectory(at: localDocumentsDirectory, includingPropertiesForKeys: [.fileSizeKey, .contentModificationDateKey, .isDirectoryKey], options: [.skipsHiddenFiles]) else {
             return
         }
         
+        let validExtensions = Set(["docx", "doc", "xlsx", "xls", "pptx", "ppt", "rtf", "txt", "pdf", "gdoc", "gsheet", "gslides"])
         var docs: [LocalWorkspaceDocument] = []
         for url in items {
+            let values = try? url.resourceValues(forKeys: [.isDirectoryKey, .fileSizeKey, .contentModificationDateKey])
+            if values?.isDirectory == true { continue }
+            
+            let ext = url.pathExtension.lowercased()
+            guard validExtensions.contains(ext) else { continue }
+            
             let name = url.deletingPathExtension().lastPathComponent
-            let ext = url.pathExtension
-            let resources = try? url.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey])
-            let size = resources?.fileSize ?? 0
-            let modDate = resources?.contentModificationDate ?? Date()
+            guard !name.hasPrefix("."), name != "OfflineHTMLCache" else { continue }
+            
+            let size = values?.fileSize ?? 0
+            let modDate = values?.contentModificationDate ?? Date()
             
             let formattedSize = ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file)
             
@@ -291,10 +233,76 @@ public final class OfflineManager: ObservableObject {
     }
     
     // MARK: - Smart Document Tracker & Auto-Sync Downloader
+    /// Strips Google title suffixes and rejects transient loading/script strings so the Home recents strip stays clean.
+    public static func sanitizeTrackedDocumentTitle(_ raw: String) -> String? {
+        var title = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty else { return nil }
+        
+        let suffixes = [
+            " - Google Docs",
+            " - Google Sheets",
+            " - Google Slides",
+            " - Google Drive",
+            " - Google"
+        ]
+        for suffix in suffixes {
+            if title.hasSuffix(suffix) {
+                title = String(title.dropLast(suffix.count)).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        }
+        if title.hasPrefix("(NEW) ") {
+            title = String(title.dropFirst(6)).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        if title.hasPrefix("* ") {
+            title = String(title.dropFirst(2)).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        
+        guard title.count >= 2 else { return nil }
+        let lower = title.lowercased()
+        let badSubstrings = ["window.", "wiz_global", "function(", "{", "http://", "https://"]
+        if badSubstrings.contains(where: { lower.contains($0) }) {
+            return nil
+        }
+        let ignoredExact: Set<String> = [
+            "document",
+            "untitled",
+            "google docs",
+            "google sheets",
+            "google slides",
+            "google drive",
+            "loading...",
+            "loading",
+            "sign in"
+        ]
+        if ignoredExact.contains(lower) {
+            return nil
+        }
+        return title
+    }
+    
     private func loadTrackedDocuments() {
         if let data = UserDefaults.standard.data(forKey: kTrackedDocsKey),
            let list = try? JSONDecoder().decode([TrackedWorkspaceDocument].self, from: data) {
-            self.trackedDocuments = list
+            var seenIds = Set<String>()
+            var seenKeys = Set<String>()
+            var cleaned: [TrackedWorkspaceDocument] = []
+            
+            for var doc in list {
+                if doc.id.hasPrefix("doc_tracked_") { continue }
+                guard let validTitle = Self.sanitizeTrackedDocumentTitle(doc.title) else { continue }
+                let dedupeKey = "\(doc.type.lowercased())::\(validTitle.lowercased())"
+                if seenIds.contains(doc.id) || seenKeys.contains(dedupeKey) { continue }
+                
+                seenIds.insert(doc.id)
+                seenKeys.insert(dedupeKey)
+                doc.title = validTitle
+                cleaned.append(doc)
+            }
+            
+            self.trackedDocuments = cleaned
+            if cleaned.count != list.count || cleaned != list {
+                persistTrackedDocuments()
+            }
         }
     }
     
@@ -304,53 +312,81 @@ public final class OfflineManager: ObservableObject {
         }
     }
     
+    public func removeTrackedDocument(id: String) {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            trackedDocuments.removeAll(where: { $0.id == id })
+        }
+        persistTrackedDocuments()
+    }
+    
+    public func clearTrackedDocuments() {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            trackedDocuments.removeAll()
+        }
+        persistTrackedDocuments()
+    }
+    
     public func handleTrackedDocumentMessage(_ dict: [String: Any]) {
         let action = dict["action"] as? String ?? ""
         
         // Handle batch document list scanned from Google Docs home page
         if action == "documentListScanned", let docs = dict["documents"] as? [[String: Any]] {
             let now = Date()
+            var changed = false
             for item in docs {
-                if let docId = item["docId"] as? String, !docId.isEmpty,
-                   let title = item["title"] as? String, !title.isEmpty {
-                    let type = item["type"] as? String ?? "docs"
-                    let url = item["url"] as? String ?? ""
-                    let exportUrl = item["exportUrl"] as? String ?? ""
-                    
-                    if let idx = trackedDocuments.firstIndex(where: { $0.id == docId }) {
-                        trackedDocuments[idx].title = title
-                        trackedDocuments[idx].url = url
-                        if !exportUrl.isEmpty { trackedDocuments[idx].exportUrl = exportUrl }
-                    } else {
-                        trackedDocuments.append(TrackedWorkspaceDocument(
-                            id: docId,
-                            title: title,
-                            type: type,
-                            url: url,
-                            exportUrl: exportUrl,
-                            lastOpened: now,
-                            localFilePath: nil
-                        ))
-                    }
+                guard let docId = item["docId"] as? String, !docId.isEmpty,
+                      let rawTitle = item["title"] as? String,
+                      let title = Self.sanitizeTrackedDocumentTitle(rawTitle) else {
+                    continue
+                }
+                let type = item["type"] as? String ?? "docs"
+                let url = item["url"] as? String ?? ""
+                let exportUrl = item["exportUrl"] as? String ?? ""
+                let normalizedTitleKey = title.lowercased()
+                
+                if let idx = trackedDocuments.firstIndex(where: {
+                    $0.id == docId || ($0.type.lowercased() == type.lowercased() && $0.title.lowercased() == normalizedTitleKey)
+                }) {
+                    trackedDocuments[idx].title = title
+                    if !url.isEmpty { trackedDocuments[idx].url = url }
+                    if !exportUrl.isEmpty { trackedDocuments[idx].exportUrl = exportUrl }
+                    changed = true
+                } else {
+                    trackedDocuments.append(TrackedWorkspaceDocument(
+                        id: docId,
+                        title: title,
+                        type: type,
+                        url: url,
+                        exportUrl: exportUrl,
+                        lastOpened: now,
+                        localFilePath: nil
+                    ))
+                    changed = true
                 }
             }
-            persistTrackedDocuments()
+            if changed {
+                persistTrackedDocuments()
+            }
             return
         }
         
         guard let docId = dict["docId"] as? String, !docId.isEmpty,
-              let title = dict["title"] as? String, !title.isEmpty else {
+              let rawTitle = dict["title"] as? String,
+              let title = Self.sanitizeTrackedDocumentTitle(rawTitle) else {
             return
         }
         let type = dict["type"] as? String ?? "docs"
         let url = dict["url"] as? String ?? ""
         let exportUrl = dict["exportUrl"] as? String ?? ""
+        let normalizedTitleKey = title.lowercased()
         
         let now = Date()
-        if let idx = trackedDocuments.firstIndex(where: { $0.id == docId }) {
+        if let idx = trackedDocuments.firstIndex(where: {
+            $0.id == docId || ($0.type.lowercased() == type.lowercased() && $0.title.lowercased() == normalizedTitleKey)
+        }) {
             trackedDocuments[idx].title = title
-            trackedDocuments[idx].url = url
-            trackedDocuments[idx].exportUrl = exportUrl
+            if !url.isEmpty { trackedDocuments[idx].url = url }
+            if !exportUrl.isEmpty { trackedDocuments[idx].exportUrl = exportUrl }
             trackedDocuments[idx].lastOpened = now
         } else {
             trackedDocuments.append(TrackedWorkspaceDocument(
@@ -364,32 +400,11 @@ public final class OfflineManager: ObservableObject {
             ))
         }
         persistTrackedDocuments()
-        
-        // Smart Downloader: automatically download and cache local offline copy into ~/Documents/Workspace.mac/
-        if !exportUrl.isEmpty {
-            smartDownloadDocument(docId: docId, title: title, type: type, exportUrlString: exportUrl)
-        }
     }
     
     public func handleOfflineDocumentSaverMessage(_ dict: [String: Any]) {
-        _ = dict["action"] as? String ?? "save"
-        let title = (dict["title"] as? String ?? "Untitled").trimmingCharacters(in: .whitespacesAndNewlines)
-        let content = dict["content"] as? String ?? ""
-        
-        let invalidChars = CharacterSet(charactersIn: "/\\?%*|\"<>:")
-        var cleanTitle = title.components(separatedBy: invalidChars).joined(separator: "-").trimmingCharacters(in: .whitespacesAndNewlines)
-        if cleanTitle.isEmpty { cleanTitle = "Untitled Document" }
-        
-        let targetUrl = localDocumentsDirectory.appendingPathComponent("\(cleanTitle).rtf")
-        
-        let attrString = NSAttributedString(string: content, attributes: [
-            .font: NSFont.systemFont(ofSize: 15),
-            .foregroundColor: NSColor.textColor
-        ])
-        if let rtfData = try? attrString.data(from: NSRange(location: 0, length: attrString.length), documentAttributes: [.documentType: NSAttributedString.DocumentType.rtf]) {
-            try? rtfData.write(to: targetUrl)
-            scanLocalDocuments()
-        }
+        // Google Docs now persists edits directly to WebKit's "GoogleDocs" IndexedDB database.
+        // Avoid writing redundant .rtf copies on every keystroke autoSave.
     }
     
     public func smartDownloadDocument(docId: String, title: String, type: String, exportUrlString: String) {
@@ -413,6 +428,20 @@ public final class OfflineManager: ObservableObject {
             
             // Extract active session cookies from WKWebsiteDataStore
             let cookies = await AppState.shared.activeDataStore.httpCookieStore.allCookies()
+            
+            // Configure a dedicated session with cookie storage so 302 redirects retain auth
+            let cookieStorage = HTTPCookieStorage()
+            for cookie in cookies {
+                cookieStorage.setCookie(cookie)
+            }
+            let sessionConfig = URLSessionConfiguration.default
+            sessionConfig.httpCookieStorage = cookieStorage
+            sessionConfig.httpShouldSetCookies = true
+            sessionConfig.httpCookieAcceptPolicy = .always
+            sessionConfig.timeoutIntervalForRequest = 30
+            
+            let session = URLSession(configuration: sessionConfig)
+            
             var request = URLRequest(url: exportUrl)
             let headers = HTTPCookie.requestHeaderFields(with: cookies)
             for (header, val) in headers {
@@ -421,9 +450,17 @@ public final class OfflineManager: ObservableObject {
             request.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36", forHTTPHeaderField: "User-Agent")
             request.timeoutInterval = 30
             
+            print("[OfflineDownloader] Downloading: \(title) (\(docId)) from \(exportUrl.absoluteString)")
+            
             do {
-                let (data, response) = try await URLSession.shared.data(for: request)
-                guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200, data.count > 100 else {
+                let (data, response) = try await session.data(for: request)
+                guard let httpResponse = response as? HTTPURLResponse else {
+                    print("[OfflineDownloader] Non-HTTP response for \(title)")
+                    return
+                }
+                print("[OfflineDownloader] Response for \(title): status \(httpResponse.statusCode), bytes \(data.count)")
+                guard httpResponse.statusCode == 200, data.count > 100 else {
+                    print("[OfflineDownloader] Download failed or not ready for \(title) (\(httpResponse.statusCode))")
                     return
                 }
                 
@@ -441,6 +478,7 @@ public final class OfflineManager: ObservableObject {
                 
                 let targetUrl = self.localDocumentsDirectory.appendingPathComponent("\(cleanTitle).\(ext)")
                 try data.write(to: targetUrl, options: .atomic)
+                print("[OfflineDownloader] Saved offline document: \(targetUrl.path)")
                 
                 await MainActor.run {
                     if let idx = self.trackedDocuments.firstIndex(where: { $0.id == docId }) {
@@ -450,7 +488,7 @@ public final class OfflineManager: ObservableObject {
                     self.scanLocalDocuments()
                 }
             } catch {
-                // Silently ignore network export failures when offline
+                print("[OfflineDownloader] Network error downloading \(title): \(error.localizedDescription)")
             }
         }
     }

@@ -55,4 +55,9 @@ public final class WebKitPool {
     public func clearAll() {
         webViews.removeAll()
     }
+    
+    /// Returns all currently pooled WKWebView instances across apps and accounts.
+    public var allWebViews: [WKWebView] {
+        Array(webViews.values)
+    }
 }

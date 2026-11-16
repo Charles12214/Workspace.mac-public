@@ -35,7 +35,7 @@ public struct WeatherTimeWidgetView: View {
                             HStack(spacing: 4) {
                                 Image(systemName: weather.symbolName)
                                     .font(.system(size: 11, weight: .semibold))
-                                    .foregroundStyle(weatherSymbolColor(weather.symbolName))
+                                    .foregroundStyle(WeatherService.symbolColor(for: weather.symbolName))
                                 
                                 Text("\(weather.formattedTemp)\(service.temperatureUnit.symbol)")
                                     .font(.system(size: 11, weight: .medium, design: .rounded))
@@ -102,18 +102,21 @@ public struct WeatherTimeWidgetView: View {
                 .help("Refresh Weather")
             }
             
+            // Quick Location Switcher (when 2+ locations saved)
+            WeatherLocationSwitcherStrip()
+            
             // Primary Condition Card
             if let weather = service.weatherInfo {
                 HStack(spacing: 16) {
                     // Condition Icon
                     ZStack {
                         Circle()
-                            .fill(weatherSymbolColor(weather.symbolName).opacity(0.14))
+                            .fill(WeatherService.symbolColor(for: weather.symbolName).opacity(0.14))
                             .frame(width: 48, height: 48)
                         
                         Image(systemName: weather.symbolName)
                             .font(.system(size: 24, weight: .semibold))
-                            .foregroundStyle(weatherSymbolColor(weather.symbolName))
+                            .foregroundStyle(WeatherService.symbolColor(for: weather.symbolName))
                     }
                     
                     VStack(alignment: .leading, spacing: 2) {
@@ -180,7 +183,7 @@ public struct WeatherTimeWidgetView: View {
                                         
                                         Image(systemName: hour.symbolName)
                                             .font(.system(size: 14))
-                                            .foregroundStyle(weatherSymbolColor(hour.symbolName))
+                                            .foregroundStyle(WeatherService.symbolColor(for: hour.symbolName))
                                             .frame(height: 16)
                                         
                                         Text("\(hour.temperature)°")
@@ -220,23 +223,46 @@ public struct WeatherTimeWidgetView: View {
         .padding(16)
         .frame(width: 380)
     }
+}
+
+// MARK: - Shared Popover Location Switcher Strip
+public struct WeatherLocationSwitcherStrip: View {
+    @ObservedObject private var service = WeatherService.shared
     
-    // MARK: - Dynamic Weather Symbol Colors
-    private func weatherSymbolColor(_ name: String) -> Color {
-        if name.contains("sun.max") {
-            return Color(hex: "F4B400")
-        } else if name.contains("sun") {
-            return Color(hex: "FBBC04")
-        } else if name.contains("rain") || name.contains("drizzle") {
-            return Color(hex: "1A73E8")
-        } else if name.contains("snow") || name.contains("snowflake") {
-            return Color(hex: "00A4F9")
-        } else if name.contains("bolt") {
-            return Color(hex: "EA4335")
-        } else if name.contains("moon") {
-            return Color(hex: "9B51E0")
-        } else {
-            return Color.secondary
+    public init() {}
+    
+    public var body: some View {
+        if service.savedLocations.count > 1 {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(service.savedLocations) { loc in
+                        let isActive = service.activeLocation?.id == loc.id
+                        Button(action: {
+                            service.selectLocation(id: loc.id)
+                        }) {
+                            HStack(spacing: 4) {
+                                if loc.isCurrentGPS {
+                                    Image(systemName: "location.fill")
+                                        .font(.system(size: 8.5))
+                                }
+                                Text(loc.name)
+                                    .font(.system(size: 10.5, weight: isActive ? .bold : .medium))
+                            }
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 4)
+                            .background(
+                                Capsule().fill(isActive ? Color(hex: "1A73E8").opacity(0.16) : Color.primary.opacity(0.05))
+                            )
+                            .overlay(
+                                Capsule().stroke(isActive ? Color(hex: "1A73E8").opacity(0.6) : Color.clear, lineWidth: 1)
+                            )
+                            .foregroundStyle(isActive ? Color(hex: "1A73E8") : Color.secondary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 1)
+            }
         }
     }
 }

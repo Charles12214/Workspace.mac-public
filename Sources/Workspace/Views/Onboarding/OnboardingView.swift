@@ -131,47 +131,68 @@ public struct OnboardingView: View {
     
     // MARK: - Step 1: Welcome Screen
     private var step1WelcomeView: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 16) {
             // Workspace App Icon Emblem (Isolated Animation)
             WelcomePulsingEmblem()
-                .padding(.bottom, 8)
+                .padding(.bottom, 2)
             
             VStack(spacing: 8) {
+                HStack(spacing: 6) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 10.5, weight: .bold))
+                    Text("WHAT'S NEW IN V1.3.0")
+                        .font(.system(size: 10, weight: .heavy, design: .rounded))
+                        .tracking(0.8)
+                }
+                .foregroundStyle(Color(hex: "1A73E8"))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .background(Capsule().fill(Color(hex: "1A73E8").opacity(0.12)))
+                
                 Text("Hey! Welcome to Workspace.mac.")
                     .font(.system(size: 28, weight: .bold, design: .rounded))
                     .foregroundStyle(.primary)
                 
-                Text("Here, you'll find all your google workspace apps... but better!")
-                    .font(.system(size: 16, weight: .medium))
+                Text("All 18 Google Workspace apps & Gemini in one fast, private, open-source macOS client.")
+                    .font(.system(size: 14.5, weight: .medium))
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 20)
             }
             
-            // Feature Highlights
-            HStack(spacing: 16) {
+            // V1.3.0 Feature Highlights (2x2 Grid)
+            LazyVGrid(
+                columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)],
+                spacing: 12
+            ) {
                 featureHighlightPill(
-                    icon: "sparkles",
-                    title: "Gemini Integrated",
-                    subtitle: "AI powered workflow",
-                    color: GeminiPalette.blue
+                    icon: "bolt.shield.fill",
+                    title: "OfflineSuite.mac",
+                    subtitle: "Edit Google Docs offline & auto-sync in place",
+                    color: Color(hex: "34A853")
                 )
                 featureHighlightPill(
-                    icon: "macwindow.on.rectangle",
-                    title: "Workspace.mac Client",
-                    subtitle: "Native macOS desktop experience",
-                    color: Color(hex: "1A73E8")
+                    icon: "cloud.sun.rain.fill",
+                    title: "Dynamic Atmosphere",
+                    subtitle: "Live weather-reactive animated Home skies",
+                    color: Color(hex: "FF9500")
                 )
                 featureHighlightPill(
                     icon: "lock.shield.fill",
-                    title: "100% Free & Local",
-                    subtitle: "Zero paywalls or fees",
-                    color: Color(hex: "34A853")
+                    title: "Encrypted Location Vault",
+                    subtitle: "Save up to 5 cities privately with AES-GCM",
+                    color: Color(hex: "1A73E8")
+                )
+                featureHighlightPill(
+                    icon: "macwindow.on.rectangle",
+                    title: "Custom Home & Groups",
+                    subtitle: "Collapsible sections, split tiling, & Tabbed Settings",
+                    color: GeminiPalette.blue
                 )
             }
-            .padding(.top, 14)
+            .padding(.top, 6)
         }
-        .padding(28)
+        .padding(26)
         .liquidGlass(cornerRadius: 24)
     }
     
@@ -422,7 +443,7 @@ public struct OnboardingView: View {
                                     .font(.system(size: 12, weight: .bold))
                                     .foregroundStyle(.primary)
                                 
-                                Text("Used strictly on your Mac to request local weather from Open-Meteo. Coordinates are never stored, tracked, or sent to any analytics server.")
+                                Text("Used strictly on your Mac to fetch weather from Open-Meteo. Coordinates stay in your encrypted local vault so updates won't re-prompt.")
                                     .font(.system(size: 11))
                                     .foregroundStyle(.secondary)
                                     .lineSpacing(1.5)
@@ -431,14 +452,19 @@ public struct OnboardingView: View {
                         
                         // Location Action Button / Status
                         HStack {
-                            if weatherService.isLocationAuthorized {
-                                HStack(spacing: 5) {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .font(.system(size: 12))
-                                        .foregroundStyle(Color(hex: "34A853"))
-                                    Text("Location Authorized (\(weatherService.detectedCity))")
-                                        .font(.system(size: 11.5, weight: .semibold))
-                                        .foregroundStyle(Color(hex: "34A853"))
+                            if weatherService.activeLocation != nil || weatherService.isLocationAuthorized {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    HStack(spacing: 5) {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .font(.system(size: 12))
+                                            .foregroundStyle(Color(hex: "34A853"))
+                                        Text("Saved Location: \(weatherService.activeLocation?.name ?? weatherService.detectedCity)")
+                                            .font(.system(size: 11.5, weight: .semibold))
+                                            .foregroundStyle(Color(hex: "34A853"))
+                                    }
+                                    Text("Stored in your encrypted local vault so app updates won't re-prompt.")
+                                        .font(.system(size: 10))
+                                        .foregroundStyle(.secondary)
                                 }
                             } else {
                                 Button(action: {
@@ -500,9 +526,23 @@ public struct OnboardingView: View {
                         }
                         .padding(.top, 4)
                     }
+                    
+                    Divider().opacity(0.3)
+                    
+                    Toggle(isOn: $state.isWeatherAtmosphereEnabled) {
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text("Dynamic Weather Atmosphere Background")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundStyle(.primary)
+                            Text("Subtle animated glow, clouds, rain, snow, or frost on Home matching your weather (save up to 5 locations in Settings).")
+                                .font(.system(size: 10.5))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .toggleStyle(.switch)
                 }
             }
-            .padding(16)
+            .padding(14)
             .liquidGlass(cornerRadius: 18, tintColor: Color(hex: "FF9500"))
             
             // Bottom reassurance note
@@ -511,32 +551,45 @@ public struct OnboardingView: View {
                     .foregroundStyle(Color(hex: "1A73E8"))
                     .font(.system(size: 12))
                 
-                Text("Completely optional • No trackers • You can change or disable this anytime in Settings")
-                    .font(.system(size: 12, weight: .medium))
+                Text("Completely optional • Encrypted local vault • Customize atmosphere & up to 5 locations anytime in Settings")
+                    .font(.system(size: 11.5, weight: .medium))
                     .foregroundStyle(.secondary)
             }
         }
-        .padding(26)
+        .padding(22)
         .liquidGlass(cornerRadius: 24)
     }
     
     private func featureHighlightPill(icon: String, title: String, subtitle: String, color: Color) -> some View {
-        VStack(spacing: 6) {
-            Image(systemName: icon)
-                .font(.system(size: 20))
-                .foregroundStyle(color)
+        HStack(alignment: .center, spacing: 12) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(color.opacity(0.14))
+                    .frame(width: 36, height: 36)
+                
+                Image(systemName: icon)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(color)
+            }
             
-            Text(title)
-                .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(.primary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 12.5, weight: .bold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                
+                Text(subtitle)
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             
-            Text(subtitle)
-                .font(.system(size: 10))
-                .foregroundStyle(.secondary)
+            Spacer(minLength: 0)
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 14)
-        .padding(.horizontal, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 11)
+        .padding(.horizontal, 12)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(Color.primary.opacity(0.03))
@@ -766,14 +819,8 @@ public struct OnboardingView: View {
                     
                     ForEach(filtered) { app in
                         HStack(spacing: 12) {
-                            ZStack {
-                                RoundedRectangle(cornerRadius: 8)
-                                    .fill(app.primaryColor.opacity(0.18))
-                                    .frame(width: 32, height: 32)
-                                Image(systemName: app.iconSymbol)
-                                    .font(.system(size: 14, weight: .semibold))
-                                    .foregroundStyle(app.primaryColor)
-                            }
+                            GoogleAppIconView(appId: app.id, size: 30)
+                                .frame(width: 32, height: 32)
                             
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(app.name)
@@ -925,25 +972,75 @@ public struct OnboardingView: View {
     
     // MARK: - Step 8: Final Setup Screen
     private var step8FinalView: some View {
-        VStack(spacing: 28) {
+        VStack(spacing: 20) {
             // Animated Soft Pulsing Workspace App Icon (Isolated Animation)
             FinalePulsingEmblem()
             
             // Sentence-level smooth gradient animation with blur decay
-            VStack(spacing: 12) {
+            VStack(spacing: 10) {
                 AnimatedUpriseBlurText(
                     "You're all setup!",
-                    font: .system(size: 38, weight: .bold, design: .rounded),
+                    font: .system(size: 36, weight: .bold, design: .rounded),
                     gradient: GeminiPalette.linearGradient,
                     baseStaggerDelay: 0.032
                 )
                 
-                Text("All your Google Workspace tools are ready locally in workspace.mac. Enjoy seamless collaboration!")
-                    .font(.system(size: 15, weight: .medium))
+                Text("All your Google Workspace tools are ready locally in Workspace.mac. Enjoy seamless collaboration!")
+                    .font(.system(size: 14.5, weight: .medium))
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
-                    .frame(maxWidth: 420)
+                    .frame(maxWidth: 460)
             }
+            
+            // V1.3.0 Release Highlights & Roadmap Card
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 6) {
+                    Image(systemName: "map.fill")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(Color(hex: "1A73E8"))
+                    
+                    Text("V1.3.0 HIGHLIGHTS & ROADMAP")
+                        .font(.system(size: 10.5, weight: .heavy, design: .rounded))
+                        .foregroundStyle(.secondary)
+                        .tracking(0.8)
+                    
+                    Spacer()
+                    
+                    Text("Open Settings with ⌘,")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(Color(hex: "1A73E8"))
+                }
+                
+                HStack(alignment: .top, spacing: 14) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Ready in v1.3.0")
+                            .font(.system(size: 11.5, weight: .bold))
+                            .foregroundStyle(Color(hex: "34A853"))
+                        Text("• OfflineSuite.mac offline Docs & auto-sync\n• Animated weather atmosphere skies\n• Encrypted 5-city weather vault & collapsible Home")
+                            .font(.system(size: 10.5))
+                            .foregroundStyle(.secondary)
+                            .lineSpacing(2)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    
+                    Divider().frame(height: 54).opacity(0.3)
+                    
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Up Next on Roadmap")
+                            .font(.system(size: 11.5, weight: .bold))
+                            .foregroundStyle(GeminiPalette.blue)
+                        Text("• v1.3.1 — Google Slides offline compatibility\n• v1.3.2 — Google Sheets offline compatibility\n• Offline Drive folder smart-sync & Gemini actions")
+                            .font(.system(size: 10.5))
+                            .foregroundStyle(.secondary)
+                            .lineSpacing(2)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .padding(14)
+            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.primary.opacity(0.035)))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Color.primary.opacity(0.08), lineWidth: 1))
+            .frame(maxWidth: 560)
             
             // Pill blue button: "Lets Go! ->"
             Button(action: {
@@ -975,9 +1072,9 @@ public struct OnboardingView: View {
                 .shadow(color: Color(hex: "1A73E8").opacity(0.45), radius: 14, x: 0, y: 6)
             }
             .buttonStyle(.plain)
-            .padding(.top, 10)
+            .padding(.top, 4)
         }
-        .padding(36)
+        .padding(28)
         .liquidGlass(cornerRadius: 28, isHighlighted: true)
     }
     

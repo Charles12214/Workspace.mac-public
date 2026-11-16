@@ -37,6 +37,52 @@ public struct WorkspaceWebView: View {
             )
             .ignoresSafeArea()
             
+            // MARK: - Offline Navigation Fallback
+            // When offline and a navigation error occurs on a non-document URL,
+            // try loading with cache-first policy instead of showing a custom hub.
+            // Google Docs' own offline UI handles the rest.
+            if isOfflineError && offlineManager.isOffline {
+                VStack {
+                    Spacer()
+                    VStack(spacing: 16) {
+                        Image(systemName: "wifi.slash")
+                            .font(.system(size: 40))
+                            .foregroundStyle(.secondary)
+                        Text("You're offline")
+                            .font(.system(size: 18, weight: .bold, design: .rounded))
+                        Text("Open a document from Google Docs' offline view, or retry when connected.")
+                            .font(.system(size: 13))
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                        HStack(spacing: 12) {
+                            Button(action: {
+                                isOfflineError = false
+                                isLoading = true
+                                var req = URLRequest(url: app.url)
+                                req.cachePolicy = .returnCacheDataElseLoad
+                                webView?.load(req)
+                            }) {
+                                Label("Load Cached", systemImage: "arrow.clockwise")
+                                    .font(.system(size: 13, weight: .semibold))
+                            }
+                            .buttonStyle(.borderedProminent)
+                            
+                            Button(action: onReturnHome) {
+                                Label("Home", systemImage: "house.fill")
+                                    .font(.system(size: 13, weight: .semibold))
+                            }
+                            .buttonStyle(.bordered)
+                        }
+                    }
+                    .padding(40)
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color(nsColor: .windowBackgroundColor))
+                .zIndex(25)
+                .transition(.opacity)
+            }
+            
             // MARK: - Reconnection Cloud Sync Popup ("Saving to workspace..." -> "Saved to cloud [tick]" -> refresh)
             if offlineManager.isSyncingToCloud {
                 VStack {
@@ -78,14 +124,14 @@ public struct WorkspaceWebView: View {
             }
             
             // MARK: - Ambient Offline Status Pill
-            if OfflineManager.shared.isOffline && !offlineManager.isSyncingToCloud {
+            if offlineManager.isOffline && !offlineManager.isSyncingToCloud {
                 VStack {
                     HStack(spacing: 8) {
                         Image(systemName: "wifi.slash")
                             .font(.system(size: 11, weight: .bold))
                             .foregroundStyle(Color(hex: "F59E0B"))
                         
-                        Text("Offline • Workspace Docs Offline Extension Active")
+                        Text("Offline • OfflineSuite Active")
                             .font(.system(size: 11.5, weight: .semibold, design: .rounded))
                             .foregroundStyle(.primary)
                         
@@ -320,6 +366,23 @@ public final class WebKitHostView: NSView {
 
 // MARK: - NSViewRepresentable for WKWebView
 public struct WebKitRepresentable: NSViewRepresentable {
+    // Genuine Safari UA is required on accounts.google.com so Google serves a Safari/WebKit
+    // BotGuard challenge rather than a Chromium/V8 challenge that fails in JavaScriptCore.
+    public static let safariAuthUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.3 Safari/605.1.15"
+    // Chrome UA unlocks Google Docs/Sheets/Slides client-side offline storage outside auth flows.
+    public static let chromeWorkspaceUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+    
+    public static func isGoogleAuthURL(_ url: URL) -> Bool {
+        let host = (url.host ?? "").lowercased()
+        let path = url.path
+        let authHosts = ["accounts.google.", "accounts.youtube.", "myaccount.google.", "gds.google."]
+        if authHosts.contains(where: { host.contains($0) }) {
+            return true
+        }
+        let authPaths = ["/ServiceLogin", "/AccountChooser", "/AddSession", "/CheckCookie", "/SetSID", "/SetOSID", "/v3/signin", "/signin/", "/accounts/Set"]
+        return authPaths.contains(where: { path.contains($0) })
+    }
+    
     public let url: URL
     public let app: WorkspaceAppItem
     public let isTiled: Bool
@@ -369,24 +432,34 @@ public struct WebKitRepresentable: NSViewRepresentable {
         ) {
             let configuration = WKWebViewConfiguration()
             configuration.websiteDataStore = AppState.shared.activeDataStore
+            #if DEBUG
             configuration.preferences.setValue(true, forKey: "developerExtrasEnabled")
+            #endif
             configuration.suppressesIncrementalRendering = false
             
-            // Mask User-Agent as Chrome on macOS for Google Workspace offline engine compatibility
-            configuration.applicationNameForUserAgent = "Chrome/131.0.0.0 Safari/537.36"
+            // Leave applicationNameForUserAgent unset so switching between safariAuthUserAgent
+            // and chromeWorkspaceUserAgent is never tainted with a trailing Chrome token on login.
             
-            // Inject official Google Docs Offline Chrome Extension Polyfill / Shim
-            configuration.userContentController.addUserScript(GoogleDocsOfflineExtension.makeUserScript())
-            configuration.userContentController.add(LeakAvoider(delegate: context.coordinator), name: "offlineExtensionReady")
-            configuration.userContentController.add(LeakAvoider(delegate: context.coordinator), name: "smartDocumentTracker")
-            configuration.userContentController.add(LeakAvoider(delegate: context.coordinator), name: "offlineDocumentSaver")
+            // Inject OfflineSuite.mac clean-room offline bridge
+            configuration.userContentController.addUserScript(OfflineSuiteInjector.makeUserScript())
+            configuration.userContentController.add(LeakAvoider(delegate: context.coordinator), name: "offlineSuite")
             
             // Suppress browser upgrade banners, hide companion sidebar cleanly via CSS, and route window.print() to native print handler
             let customScript = """
-            if (!window.location.hostname.includes('accounts.google.com')) {
-                const style = document.createElement('style');
-                style.type = 'text/css';
-                style.innerHTML = `
+            if (!window.location.hostname.includes('accounts.google.') &&
+                !window.location.hostname.includes('myaccount.google.') &&
+                !window.location.hostname.includes('gds.google.')) {
+                const injectCustomStyle = () => {
+                    if (document.getElementById('workspace-custom-styles')) return;
+                    const target = document.head || document.documentElement;
+                    if (!target) {
+                        requestAnimationFrame(injectCustomStyle);
+                        return;
+                    }
+                    const style = document.createElement('style');
+                    style.id = 'workspace-custom-styles';
+                    style.type = 'text/css';
+                    style.innerHTML = `
                     /* Promo / Download Banners */
                     #push-modal, [aria-label*="Try Chrome"], [aria-label*="switch to Chrome"],
                     [aria-label*="supported browser"], .apps-promo-card, .promo-banner, .app-download-banner,
@@ -397,9 +470,68 @@ public struct WebKitRepresentable: NSViewRepresentable {
                     .companion-app-sidebar-container {
                         display: none !important;
                     }
-                `;
-                (document.head || document.documentElement).appendChild(style);
+
+                    /* Suppress offline reconnect warning banner / butterbars */
+                    #docs-full-bleed-notification-banner,
+                    #docs-file-level-banner,
+                    #docs-account-level-banner,
+                    .full-bleed-banner,
+                    .docs-butterbar-container,
+                    .docs-material-butterbar {
+                        display: none !important;
+                    }
+
+                    /* Map standard web emoji fonts to native macOS Apple Color Emoji */
+                    @font-face {
+                        font-family: "Noto Color Emoji";
+                        src: local("Apple Color Emoji");
+                    }
+                    @font-face {
+                        font-family: "Google Color Emoji";
+                        src: local("Apple Color Emoji");
+                    }
+                    @font-face {
+                        font-family: "Segoe UI Emoji";
+                        src: local("Apple Color Emoji");
+                    }
+
+                    /* Force native macOS Apple Color Emoji for emoji pickers, tab icons, and category selectors */
+                    [role="tab"],
+                    [role="menu"],
+                    [role="menuitem"],
+                    [role="dialog"],
+                    [role="gridcell"],
+                    [role="option"],
+                    [role="button"],
+                    [class*="emoji" i],
+                    [class*="picker" i],
+                    [aria-label*="emoji" i],
+                    .navigation-item-icon,
+                    .docs-tab-icon,
+                    .docs-tab-label-text,
+                    .emoji,
+                    .punch-emoji,
+                    [data-emoji] {
+                        font-family: "Apple Color Emoji", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+                    }
+
+                    /* Ensure background offscreen extension communication frame is never visible */
+                    #extensionFrame {
+                        display: none !important;
+                        position: absolute !important;
+                        left: -9999px !important;
+                        top: -9999px !important;
+                        width: 0 !important;
+                        height: 0 !important;
+                        border: none !important;
+                    }
+                    `;
+                    target.appendChild(style);
+                };
+                injectCustomStyle();
                 
+                // (OfflineSuite bridge handles offline flags and localStorage seeding)
+
                 // Bridge native window.print() so Google Docs/Sheets/Slides trigger native macOS print sheet
                 window.print = function() {
                     try {
@@ -410,7 +542,7 @@ public struct WebKitRepresentable: NSViewRepresentable {
                 };
             }
             """
-            let userScript = WKUserScript(source: customScript, injectionTime: .atDocumentEnd, forMainFrameOnly: true)
+            let userScript = WKUserScript(source: customScript, injectionTime: .atDocumentStart, forMainFrameOnly: true)
             configuration.userContentController.addUserScript(userScript)
             configuration.userContentController.add(LeakAvoider(delegate: context.coordinator), name: "printHandler")
             
@@ -422,8 +554,16 @@ public struct WebKitRepresentable: NSViewRepresentable {
             newWv.pageZoom = 1.0
             newWv.magnification = 1.0
             
-            // Mask User-Agent as Chrome on macOS for Google Docs, Sheets & Slides native offline engine
-            newWv.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+            // Select UA based on initial destination; decidePolicyFor dynamically swaps on redirects.
+            newWv.customUserAgent = WebKitRepresentable.isGoogleAuthURL(url)
+                ? WebKitRepresentable.safariAuthUserAgent
+                : WebKitRepresentable.chromeWorkspaceUserAgent
+            
+            #if DEBUG
+            if #available(macOS 13.3, *) {
+                newWv.isInspectable = true
+            }
+            #endif
             return newWv
         }
         
@@ -433,8 +573,13 @@ public struct WebKitRepresentable: NSViewRepresentable {
         
         if isNew || wv.url == nil {
             if OfflineManager.shared.isOffline {
-                let offlineHtml = GoogleWorkspaceOfflineEngine.html(for: app)
-                wv.loadHTMLString(offlineHtml, baseURL: app.url)
+                if url.absoluteString.contains("/d/") {
+                    var request = URLRequest(url: url)
+                    request.cachePolicy = .returnCacheDataElseLoad
+                    wv.load(request)
+                } else {
+                    self.isOfflineError = true
+                }
             } else {
                 var request = URLRequest(url: url)
                 request.cachePolicy = .useProtocolCachePolicy
@@ -482,8 +627,13 @@ public struct WebKitRepresentable: NSViewRepresentable {
             
             if wv.url == nil {
                 if OfflineManager.shared.isOffline {
-                    let offlineHtml = GoogleWorkspaceOfflineEngine.html(for: app)
-                    wv.loadHTMLString(offlineHtml, baseURL: app.url)
+                    if url.absoluteString.contains("/d/") {
+                        var request = URLRequest(url: url)
+                        request.cachePolicy = .returnCacheDataElseLoad
+                        wv.load(request)
+                    } else {
+                        self.isOfflineError = true
+                    }
                 } else {
                     var request = URLRequest(url: url)
                     request.cachePolicy = .useProtocolCachePolicy
@@ -500,6 +650,7 @@ public struct WebKitRepresentable: NSViewRepresentable {
     public class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate, WKScriptMessageHandler {
         var parent: WebKitRepresentable
         private var observers: [NSKeyValueObservation] = []
+        private var lastRejectionRecoveryAt: Date? = nil
         
         init(_ parent: WebKitRepresentable) {
             self.parent = parent
@@ -570,9 +721,11 @@ public struct WebKitRepresentable: NSViewRepresentable {
         
         @MainActor
         public func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-            if let urlStr = webView.url?.absoluteString {
+            if let url = webView.url {
+                let urlStr = url.absoluteString
                 parent.currentUrlString = urlStr
                 AppState.shared.notifyUrlChanged(sourceAppId: parent.app.id, newUrlString: urlStr)
+                OfflineHTMLCacheService.shared.saveFromWebView(webView, url: url)
             }
             parent.isLoading = false
             parent.isOfflineError = false
@@ -603,21 +756,122 @@ public struct WebKitRepresentable: NSViewRepresentable {
                nsError.code == NSURLErrorTimedOut ||
                OfflineManager.shared.isOffline {
                 
-                // Immediately serve the authentic Google Workspace Offline view
-                let offlineHtml = GoogleWorkspaceOfflineEngine.html(for: parent.app)
-                webView.loadHTMLString(offlineHtml, baseURL: parent.app.url)
+                let targetURL = webView.url ?? parent.app.url
+                let isDocUrl = targetURL.absoluteString.contains("/d/")
+                
+                // First check if we have disk-cached HTML for this URL or App
+                if let cached = OfflineHTMLCacheService.shared.cachedHTML(for: targetURL) {
+                    print("[OfflineHTMLCache] Loading cached HTML for \(targetURL.absoluteString)")
+                    webView.loadHTMLString(cached, baseURL: targetURL)
+                    parent.isLoading = false
+                    parent.isOfflineError = false
+                    return
+                } else if !isDocUrl, let (appCachedHtml, _) = OfflineHTMLCacheService.shared.cachedHTML(forAppId: parent.app.id) {
+                    print("[OfflineHTMLCache] Loading app cached HTML for \(parent.app.id)")
+                    webView.loadHTMLString(appCachedHtml, baseURL: targetURL)
+                    parent.isLoading = false
+                    parent.isOfflineError = false
+                    return
+                }
+                
+                // For document URLs, try loading with cache-first policy
+                // so Google Docs' own offline UI and IndexedDB can take over
+                if isDocUrl {
+                    print("[OfflineSuite] Offline — retrying document with cache-first: \(targetURL.absoluteString)")
+                    var req = URLRequest(url: targetURL)
+                    req.cachePolicy = .returnCacheDataElseLoad
+                    webView.load(req)
+                    parent.isLoading = true
+                    return
+                }
+                
+                // For non-document URLs (homescreens), show offline fallback
                 parent.isOfflineError = true
+                parent.isLoading = false
+                return
             }
             parent.isLoading = false
+        }
+        
+        @MainActor
+        private func sanitizeAuthCookiesAndLoad(_ targetURL: URL, in webView: WKWebView) {
+            webView.customUserAgent = WebKitRepresentable.safariAuthUserAgent
+            let cookieStore = webView.configuration.websiteDataStore.httpCookieStore
+            let transientNames: Set<String> = ["__Host-GAPS", "GAPS", "LSOLH", "OTZ"]
+            
+            Task { @MainActor in
+                let cookies = await cookieStore.allCookies()
+                let hasSession = cookies.contains { cookie in
+                    (cookie.name == "SID" || cookie.name == "__Secure-1PSID" || cookie.name == "__Secure-3PSID") &&
+                    cookie.domain.lowercased().contains("google.")
+                }
+                
+                // Purge poisoned BotGuard cookies from prior Chrome-UA redirects before loading Safari login.
+                for cookie in cookies where cookie.domain.lowercased().contains("accounts.google.") {
+                    if !hasSession || transientNames.contains(cookie.name) {
+                        await cookieStore.deleteCookie(cookie)
+                    }
+                }
+                
+                var req = URLRequest(url: targetURL)
+                req.setValue(WebKitRepresentable.safariAuthUserAgent, forHTTPHeaderField: "User-Agent")
+                webView.load(req)
+            }
         }
         
         @MainActor
         public func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, preferences: WKWebpagePreferences, decisionHandler: @escaping @MainActor (WKNavigationActionPolicy, WKWebpagePreferences) -> Void) {
             if navigationAction.shouldPerformDownload {
                 decisionHandler(.download, preferences)
-            } else {
-                decisionHandler(.allow, preferences)
+                return
             }
+            
+            let isMainFrame = navigationAction.targetFrame == nil || navigationAction.targetFrame?.isMainFrame == true
+            if isMainFrame, let targetURL = navigationAction.request.url {
+                let host = (targetURL.host ?? "").lowercased()
+                let path = targetURL.path
+                
+                // Auto-recover from /signin/rejected once by purging poisoned BotGuard cookies and restarting ServiceLogin.
+                if host.contains("accounts.google.") && path.contains("/signin/rejected") {
+                    let canRecover = lastRejectionRecoveryAt.map { Date().timeIntervalSince($0) > 8.0 } ?? true
+                    if canRecover {
+                        lastRejectionRecoveryAt = Date()
+                        decisionHandler(.cancel, preferences)
+                        let continueTarget = URLComponents(url: targetURL, resolvingAgainstBaseURL: false)?
+                            .queryItems?
+                            .first(where: { $0.name == "continue" })?.value
+                            ?? parent.app.url.absoluteString
+                        var comps = URLComponents(string: "https://accounts.google.com/ServiceLogin")!
+                        comps.queryItems = [URLQueryItem(name: "continue", value: continueTarget)]
+                        sanitizeAuthCookiesAndLoad(comps.url ?? targetURL, in: webView)
+                        return
+                    }
+                }
+                
+                if WebKitRepresentable.isGoogleAuthURL(targetURL) {
+                    if webView.customUserAgent != WebKitRepresentable.safariAuthUserAgent {
+                        webView.customUserAgent = WebKitRepresentable.safariAuthUserAgent
+                        if navigationAction.request.httpMethod == "GET" {
+                            decisionHandler(.cancel, preferences)
+                            sanitizeAuthCookiesAndLoad(targetURL, in: webView)
+                            return
+                        }
+                    }
+                } else {
+                    if webView.customUserAgent != WebKitRepresentable.chromeWorkspaceUserAgent {
+                        webView.customUserAgent = WebKitRepresentable.chromeWorkspaceUserAgent
+                        if navigationAction.request.httpMethod == "GET" {
+                            decisionHandler(.cancel, preferences)
+                            var req = URLRequest(url: targetURL)
+                            req.setValue(WebKitRepresentable.chromeWorkspaceUserAgent, forHTTPHeaderField: "User-Agent")
+                            webView.load(req)
+                            return
+                        }
+                    }
+                }
+            }
+            
+            decisionHandler(.allow, preferences)
         }
         
         @MainActor
@@ -694,7 +948,7 @@ public struct WebKitRepresentable: NSViewRepresentable {
             return nil
         }
         
-        // MARK: - WKScriptMessageHandler (Native Printing & Offline Extension Bridge)
+        // MARK: - WKScriptMessageHandler (Native Printing & OfflineSuite Bridge)
         public func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
             if message.name == "printHandler" {
                 Task { @MainActor in
@@ -702,20 +956,9 @@ public struct WebKitRepresentable: NSViewRepresentable {
                         AppState.shared.runNativePrintOperation(for: webView)
                     }
                 }
-            } else if message.name == "offlineExtensionReady" {
-                // Google Docs Offline Extension Shim active and ready
-            } else if message.name == "smartDocumentTracker" {
-                if let dict = message.body as? [String: Any] {
-                    Task { @MainActor in
-                        OfflineManager.shared.handleTrackedDocumentMessage(dict)
-                    }
-                }
-            } else if message.name == "offlineDocumentSaver" {
-                if let dict = message.body as? [String: Any] {
-                    Task { @MainActor in
-                        OfflineManager.shared.handleOfflineDocumentSaverMessage(dict)
-                    }
-                }
+            } else if message.name == "offlineSuite" {
+                // Route all OfflineSuite messages to the engine
+                OfflineSuiteEngine.shared.userContentController(userContentController, didReceive: message)
             }
         }
     }

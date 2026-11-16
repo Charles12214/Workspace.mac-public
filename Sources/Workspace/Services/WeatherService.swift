@@ -2,6 +2,7 @@ import Foundation
 import SwiftUI
 import CoreLocation
 import Combine
+import CryptoKit
 
 // MARK: - Temperature Unit
 public enum TemperatureUnit: String, CaseIterable, Identifiable, Codable, Sendable {
@@ -63,10 +64,45 @@ public struct WeatherInfo: Sendable {
     }
 }
 
+// MARK: - Saved Weather Location & Geocoding Models
+public struct SavedWeatherLocation: Identifiable, Codable, Equatable, Sendable {
+    public var id: String
+    public var name: String
+    public var subtitle: String
+    public var latitude: Double
+    public var longitude: Double
+    public var isCurrentGPS: Bool
+    
+    public init(
+        id: String = UUID().uuidString,
+        name: String,
+        subtitle: String = "",
+        latitude: Double,
+        longitude: Double,
+        isCurrentGPS: Bool = false
+    ) {
+        self.id = id
+        self.name = name
+        self.subtitle = subtitle
+        self.latitude = latitude
+        self.longitude = longitude
+        self.isCurrentGPS = isCurrentGPS
+    }
+}
+
+public struct GeocodedCityResult: Identifiable, Sendable {
+    public let id: String
+    public let name: String
+    public let subtitle: String
+    public let latitude: Double
+    public let longitude: Double
+}
+
 // MARK: - Weather & Time Service
 @MainActor
 public final class WeatherService: NSObject, ObservableObject, CLLocationManagerDelegate {
     public static let shared = WeatherService()
+    public static let maxLocationsCount = 5
     
     // MARK: - Dynamic Weather Symbol Colors
     public static func symbolColor(for name: String) -> Color {
@@ -96,8 +132,12 @@ public final class WeatherService: NSObject, ObservableObject, CLLocationManager
     @Published public var isWeatherEnabled: Bool {
         didSet {
             UserDefaults.standard.set(isWeatherEnabled, forKey: kShowWeatherKey)
-            if isWeatherEnabled && weatherInfo == nil {
-                fetchWeather()
+            if isWeatherEnabled && !oldValue {
+                if !savedLocations.isEmpty {
+                    fetchWeather()
+                } else {
+                    requestLocationAuthorization()
+                }
             }
         }
     }
@@ -128,17 +168,37 @@ public final class WeatherService: NSObject, ObservableObject, CLLocationManager
     @Published public var lastUpdated: Date? = nil
     @Published public var detectedCity: String = "Current Location"
     
+    // Encrypted Multi-Location State (Up to 5)
+    @Published public var savedLocations: [SavedWeatherLocation] = []
+    @Published public var activeLocationId: String? = nil
+    @Published public var citySearchResults: [GeocodedCityResult] = []
+    @Published public var isSearchingCities: Bool = false
+    
+    public var activeLocation: SavedWeatherLocation? {
+        if let activeId = activeLocationId,
+           let match = savedLocations.first(where: { $0.id == activeId }) {
+            return match
+        }
+        return savedLocations.first
+    }
+    
     private var clockTimer: AnyCancellable?
     private var weatherTimer: AnyCancellable?
     private var locationManager: CLLocationManager?
     private var lastKnownLocation: CLLocation?
+    private var selectNextGPSLocation: Bool = false
+    
+    private struct VaultPayload: Codable {
+        var locations: [SavedWeatherLocation]
+        var activeLocationId: String?
+    }
     
     public override init() {
-        // Load preferences with sensible defaults
+        // Weather defaults to OFF on fresh installs so location permission is never requested prematurely
         if UserDefaults.standard.object(forKey: kShowWeatherKey) != nil {
             self.isWeatherEnabled = UserDefaults.standard.bool(forKey: kShowWeatherKey)
         } else {
-            self.isWeatherEnabled = true
+            self.isWeatherEnabled = false
         }
         
         if UserDefaults.standard.object(forKey: kShowTimeKey) != nil {
@@ -165,8 +225,12 @@ public final class WeatherService: NSObject, ObservableObject, CLLocationManager
         
         super.init()
         
+        loadEncryptedLocations()
+        if let active = activeLocation {
+            self.detectedCity = active.name
+        }
+        
         setupClock()
-        setupLocation()
         
         if isWeatherEnabled {
             fetchWeather()
@@ -219,20 +283,245 @@ public final class WeatherService: NSObject, ObservableObject, CLLocationManager
         }
     }
     
+    // MARK: - Encrypted Location Vault & Multi-Location Management
+    // Store AES-GCM encrypted coordinates in Application Support rather than UserDefaults or Keychain
+    // so ad-hoc/open-source rebuilds keep saved locations without re-prompting for Location Services or Keychain ACLs.
+    private var vaultDirectoryURL: URL {
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support", isDirectory: true)
+        return appSupport
+            .appendingPathComponent("Workspace.mac", isDirectory: true)
+            .appendingPathComponent("SecureLocationVault", isDirectory: true)
+    }
+    
+    private var vaultKeyURL: URL {
+        vaultDirectoryURL.appendingPathComponent(".vault.key")
+    }
+    
+    private var vaultDataURL: URL {
+        vaultDirectoryURL.appendingPathComponent("locations.enc")
+    }
+    
+    private func getOrCreateVaultKey(createIfMissing: Bool) -> SymmetricKey? {
+        let fm = FileManager.default
+        let dir = vaultDirectoryURL
+        if !fm.fileExists(atPath: dir.path) {
+            guard createIfMissing else { return nil }
+            try? fm.createDirectory(at: dir, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        }
+        
+        if let existing = try? Data(contentsOf: vaultKeyURL), existing.count == 32 {
+            return SymmetricKey(data: existing)
+        }
+        
+        guard createIfMissing else { return nil }
+        let newKey = SymmetricKey(size: .bits256)
+        let raw = newKey.withUnsafeBytes { Data($0) }
+        do {
+            try raw.write(to: vaultKeyURL, options: [.atomic])
+            try? fm.setAttributes([.posixPermissions: 0o600], ofItemAtPath: vaultKeyURL.path)
+            return newKey
+        } catch {
+            return nil
+        }
+    }
+    
+    private func loadEncryptedLocations() {
+        guard let key = getOrCreateVaultKey(createIfMissing: false),
+              let combined = try? Data(contentsOf: vaultDataURL),
+              let box = try? AES.GCM.SealedBox(combined: combined),
+              let decrypted = try? AES.GCM.open(box, using: key),
+              let payload = try? JSONDecoder().decode(VaultPayload.self, from: decrypted) else {
+            return
+        }
+        
+        self.savedLocations = Array(payload.locations.prefix(Self.maxLocationsCount))
+        if let activeId = payload.activeLocationId,
+           self.savedLocations.contains(where: { $0.id == activeId }) {
+            self.activeLocationId = activeId
+        } else {
+            self.activeLocationId = self.savedLocations.first?.id
+        }
+    }
+    
+    private func saveEncryptedLocations() {
+        guard let key = getOrCreateVaultKey(createIfMissing: true) else { return }
+        let payload = VaultPayload(
+            locations: Array(savedLocations.prefix(Self.maxLocationsCount)),
+            activeLocationId: activeLocationId
+        )
+        guard let jsonData = try? JSONEncoder().encode(payload),
+              let sealed = try? AES.GCM.seal(jsonData, using: key),
+              let combined = sealed.combined else {
+            return
+        }
+        do {
+            try combined.write(to: vaultDataURL, options: [.atomic])
+            try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: vaultDataURL.path)
+        } catch {}
+    }
+    
+    public func selectLocation(id: String) {
+        guard let target = savedLocations.first(where: { $0.id == id }) else { return }
+        activeLocationId = target.id
+        detectedCity = target.name
+        saveEncryptedLocations()
+        if isWeatherEnabled {
+            fetchWeather()
+        }
+    }
+    
+    public func addLocation(_ result: GeocodedCityResult) {
+        guard savedLocations.count < Self.maxLocationsCount else { return }
+        let location = SavedWeatherLocation(
+            name: result.name,
+            subtitle: result.subtitle,
+            latitude: result.latitude,
+            longitude: result.longitude,
+            isCurrentGPS: false
+        )
+        savedLocations.append(location)
+        activeLocationId = location.id
+        detectedCity = location.name
+        saveEncryptedLocations()
+        if isWeatherEnabled {
+            fetchWeather()
+        }
+    }
+    
+    public func removeLocation(id: String) {
+        savedLocations.removeAll { $0.id == id }
+        if activeLocationId == id {
+            activeLocationId = savedLocations.first?.id
+        }
+        if let active = activeLocation {
+            detectedCity = active.name
+        } else {
+            detectedCity = "Current Location"
+            if isWeatherEnabled {
+                weatherInfo = nil
+            }
+        }
+        saveEncryptedLocations()
+        if isWeatherEnabled && activeLocation != nil {
+            fetchWeather()
+        }
+    }
+    
+    public func resetAllWeatherLocationsAndSettings() {
+        weatherTimer?.cancel()
+        weatherTimer = nil
+        isWeatherEnabled = false
+        savedLocations = []
+        activeLocationId = nil
+        weatherInfo = nil
+        lastUpdated = nil
+        detectedCity = "Current Location"
+        UserDefaults.standard.removeObject(forKey: kShowWeatherKey)
+        try? FileManager.default.removeItem(at: vaultDataURL)
+        try? FileManager.default.removeItem(at: vaultKeyURL)
+    }
+    
+    private func upsertGPSLocation(name: String, subtitle: String, latitude: Double, longitude: Double, selectLocation shouldSelect: Bool) {
+        if let idx = savedLocations.firstIndex(where: { $0.isCurrentGPS }) {
+            savedLocations[idx].name = name
+            savedLocations[idx].subtitle = subtitle
+            savedLocations[idx].latitude = latitude
+            savedLocations[idx].longitude = longitude
+            if shouldSelect || activeLocationId == nil || activeLocationId == savedLocations[idx].id {
+                activeLocationId = savedLocations[idx].id
+                detectedCity = name
+            }
+        } else if savedLocations.count < Self.maxLocationsCount {
+            let loc = SavedWeatherLocation(
+                name: name,
+                subtitle: subtitle,
+                latitude: latitude,
+                longitude: longitude,
+                isCurrentGPS: true
+            )
+            savedLocations.insert(loc, at: 0)
+            if shouldSelect || activeLocationId == nil {
+                activeLocationId = loc.id
+                detectedCity = name
+            }
+        }
+        saveEncryptedLocations()
+    }
+    
+    public func searchCities(query: String) {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty,
+              let encoded = trimmed.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+              let url = URL(string: "https://geocoding-api.open-meteo.com/v1/search?name=\(encoded)&count=5&language=en&format=json") else {
+            citySearchResults = []
+            isSearchingCities = false
+            return
+        }
+        
+        isSearchingCities = true
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 10
+        request.setValue("Workspace.mac Weather", forHTTPHeaderField: "User-Agent")
+        
+        URLSession.shared.dataTask(with: request) { [weak self] data, _, error in
+            Task { @MainActor [weak self] in
+                guard let self = self else { return }
+                self.isSearchingCities = false
+                guard let data = data,
+                      error == nil,
+                      let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                      let results = json["results"] as? [[String: Any]] else {
+                    self.citySearchResults = []
+                    return
+                }
+                
+                self.citySearchResults = results.compactMap { item in
+                    guard let name = item["name"] as? String,
+                          let lat = item["latitude"] as? Double,
+                          let lon = item["longitude"] as? Double else {
+                        return nil
+                    }
+                    let admin1 = item["admin1"] as? String
+                    let country = item["country"] as? String
+                    let subtitle = [admin1, country]
+                        .compactMap { $0 }
+                        .filter { !$0.isEmpty && $0 != name }
+                        .joined(separator: ", ")
+                    let rawId = (item["id"] as? Int).map(String.init) ?? "\(name)_\(lat)_\(lon)"
+                    return GeocodedCityResult(
+                        id: rawId,
+                        name: name,
+                        subtitle: subtitle,
+                        latitude: lat,
+                        longitude: lon
+                    )
+                }
+            }
+        }.resume()
+    }
+    
     // MARK: - Location & Reverse Geocoding
     public var locationAuthorizationStatus: CLAuthorizationStatus {
         locationManager?.authorizationStatus ?? .notDetermined
     }
     
+    public static func isAuthorized(_ status: CLAuthorizationStatus) -> Bool {
+        status == .authorizedAlways || status == .authorized
+    }
+    
     public var isLocationAuthorized: Bool {
-        locationAuthorizationStatus == .authorizedAlways
+        Self.isAuthorized(locationAuthorizationStatus)
     }
     
     public func requestLocationAuthorization() {
+        selectNextGPSLocation = true
+        setupLocation()
         let status = locationManager?.authorizationStatus ?? .notDetermined
         if status == .notDetermined {
-            locationManager?.requestAlwaysAuthorization()
-        } else if status == .authorizedAlways {
+            // Matches NSLocationWhenInUseUsageDescription in Info.plist; requestAlwaysAuthorization silently fails on macOS without Always usage keys.
+            locationManager?.requestWhenInUseAuthorization()
+        } else if Self.isAuthorized(status) {
             locationManager?.requestLocation()
         } else {
             fetchWeather()
@@ -240,22 +529,17 @@ public final class WeatherService: NSObject, ObservableObject, CLLocationManager
     }
     
     private func setupLocation() {
-        locationManager = CLLocationManager()
-        locationManager?.delegate = self
-        locationManager?.desiredAccuracy = kCLLocationAccuracyKilometer
-        
-        let status = locationManager?.authorizationStatus ?? .notDetermined
-        if status == .notDetermined {
-            locationManager?.requestAlwaysAuthorization()
-        } else if status == .authorizedAlways {
-            locationManager?.requestLocation()
-        }
+        guard locationManager == nil else { return }
+        let manager = CLLocationManager()
+        manager.delegate = self
+        manager.desiredAccuracy = kCLLocationAccuracyKilometer
+        locationManager = manager
     }
     
     public nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         let status = manager.authorizationStatus
         Task { @MainActor in
-            if status == .authorizedAlways {
+            if Self.isAuthorized(status) {
                 self.locationManager?.requestLocation()
             } else {
                 // Fallback coordinates if location denied
@@ -268,7 +552,16 @@ public final class WeatherService: NSObject, ObservableObject, CLLocationManager
         guard let loc = locations.last else { return }
         Task { @MainActor in
             self.lastKnownLocation = loc
-            self.reverseGeocode(location: loc)
+            let shouldSelect = self.selectNextGPSLocation || self.activeLocationId == nil
+            self.selectNextGPSLocation = false
+            self.upsertGPSLocation(
+                name: self.detectedCity,
+                subtitle: "GPS Location",
+                latitude: loc.coordinate.latitude,
+                longitude: loc.coordinate.longitude,
+                selectLocation: shouldSelect
+            )
+            self.reverseGeocode(location: loc, selectLocation: shouldSelect)
             self.fetchWeather()
         }
     }
@@ -282,14 +575,27 @@ public final class WeatherService: NSObject, ObservableObject, CLLocationManager
         }
     }
     
-    private func reverseGeocode(location: CLLocation) {
+    private func reverseGeocode(location: CLLocation, selectLocation shouldSelect: Bool = false) {
         let geocoder = CLGeocoder()
         geocoder.reverseGeocodeLocation(location) { [weak self] placemarks, _ in
             guard let self = self, let place = placemarks?.first else { return }
             let city = place.locality ?? place.subAdministrativeArea ?? place.name ?? "Current Location"
+            let subtitle = [place.administrativeArea, place.country]
+                .compactMap { $0 }
+                .filter { !$0.isEmpty && $0 != city }
+                .joined(separator: ", ")
             Task { @MainActor in
-                self.detectedCity = city
-                if let cur = self.weatherInfo {
+                self.upsertGPSLocation(
+                    name: city,
+                    subtitle: subtitle.isEmpty ? "GPS Location" : subtitle,
+                    latitude: location.coordinate.latitude,
+                    longitude: location.coordinate.longitude,
+                    selectLocation: shouldSelect
+                )
+                if self.activeLocation?.isCurrentGPS == true || self.activeLocation == nil {
+                    self.detectedCity = city
+                }
+                if let cur = self.weatherInfo, (self.activeLocation?.isCurrentGPS == true || self.activeLocation == nil) {
                     self.weatherInfo = WeatherInfo(
                         temperature: cur.temperature,
                         apparentTemperature: cur.apparentTemperature,
@@ -311,10 +617,14 @@ public final class WeatherService: NSObject, ObservableObject, CLLocationManager
     public func fetchWeather() {
         guard isWeatherEnabled else { return }
         
-        // 1. Determine coordinates (use location or timezone/London fallback)
+        // 1. Determine coordinates (active saved location -> GPS -> London fallback)
         let lat: Double
         let lon: Double
-        if let loc = lastKnownLocation {
+        if let saved = activeLocation {
+            lat = saved.latitude
+            lon = saved.longitude
+            detectedCity = saved.name
+        } else if let loc = lastKnownLocation {
             lat = loc.coordinate.latitude
             lon = loc.coordinate.longitude
         } else {
@@ -323,8 +633,11 @@ public final class WeatherService: NSObject, ObservableObject, CLLocationManager
             lon = -0.1278
         }
         
+        // Round coordinates to 2 decimal places (~1.1 km city-level resolution) so Open-Meteo never receives exact street-level GPS coordinates.
+        let roundedLat = (lat * 100).rounded() / 100
+        let roundedLon = (lon * 100).rounded() / 100
         let unitParam = temperatureUnit == .fahrenheit ? "fahrenheit" : "celsius"
-        let urlString = "https://api.open-meteo.com/v1/forecast?latitude=\(lat)&longitude=\(lon)&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,weather_code&hourly=temperature_2m,precipitation_probability,weather_code,is_day&temperature_unit=\(unitParam)&forecast_days=2"
+        let urlString = "https://api.open-meteo.com/v1/forecast?latitude=\(roundedLat)&longitude=\(roundedLon)&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,weather_code&hourly=temperature_2m,precipitation_probability,weather_code,is_day&temperature_unit=\(unitParam)&timezone=auto&forecast_days=2"
         
         guard let url = URL(string: urlString) else { return }
         
@@ -364,10 +677,13 @@ public final class WeatherService: NSObject, ObservableObject, CLLocationManager
                    let probs = hourly["precipitation_probability"] as? [Int] {
                     
                     let isDays = hourly["is_day"] as? [Int]
-                    let nowIsoHour = ISO8601DateFormatter().string(from: Date()).prefix(13)
+                    let hourMatchFormatter = DateFormatter()
+                    hourMatchFormatter.locale = Locale(identifier: "en_US_POSIX")
+                    hourMatchFormatter.dateFormat = "yyyy-MM-dd'T'HH"
+                    let nowIsoHour = hourMatchFormatter.string(from: Date())
                     var startIndex = 0
                     for (idx, timeStr) in times.enumerated() {
-                        if timeStr.hasPrefix(String(nowIsoHour)) {
+                        if timeStr.hasPrefix(nowIsoHour) {
                             startIndex = idx
                             break
                         }
@@ -431,6 +747,7 @@ public final class WeatherService: NSObject, ObservableObject, CLLocationManager
     
     private static func isoDate(from string: String) -> Date? {
         let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "yyyy-MM-dd'T'HH:mm"
         return formatter.date(from: string)
     }

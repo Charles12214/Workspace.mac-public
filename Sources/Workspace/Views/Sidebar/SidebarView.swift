@@ -19,12 +19,13 @@ public struct SidebarView: View {
                 expandedSidebar
             }
         }
-        .frame(width: state.isSidebarCollapsed ? 58 : 260)
+        .frame(width: state.isSidebarCollapsed ? 76 : 260)
         .background(
             ZStack {
                 Rectangle().fill(Color(nsColor: .windowBackgroundColor))
                 Rectangle().fill(.ultraThinMaterial)
             }
+            .ignoresSafeArea()
         )
     }
     
@@ -509,7 +510,7 @@ public struct SidebarView: View {
             .buttonStyle(.plain)
             .padding(.bottom, 12)
         }
-        .frame(width: 58)
+        .frame(width: 76)
     }
 }
 

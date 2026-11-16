@@ -108,7 +108,7 @@ let subSize = subText.size(withAttributes: subAttrs)
 subText.draw(at: CGPoint(x: (width - subSize.width) / 2, y: 325), withAttributes: subAttrs)
 
 // Bottom tag
-let versionText = "Version 1.2.1 • Native Google Workspace Client for macOS"
+let versionText = "Version 1.3.0 • Native Google Workspace Client for macOS"
 let versionFont = NSFont.systemFont(ofSize: 11, weight: .regular)
 let versionAttrs: [NSAttributedString.Key: Any] = [
     .font: versionFont,

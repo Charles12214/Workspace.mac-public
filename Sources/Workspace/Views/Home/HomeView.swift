@@ -50,6 +50,7 @@ public struct PinnedAppsDropDelegate: DropDelegate {
 public struct HomeView: View {
     @ObservedObject var state: AppState
     @ObservedObject var greetingManager: GreetingManager
+    @ObservedObject private var offlineManager = OfflineManager.shared
     @Environment(\.colorScheme) private var colorScheme
     @State private var isPinDropTargeted: Bool = false
     @State private var isHoveringContinueCard: Bool = false
@@ -79,8 +80,16 @@ public struct HomeView: View {
     }
     
     public var body: some View {
-        ScrollView(.vertical, showsIndicators: true) {
-            VStack(alignment: .leading, spacing: 26) {
+        ZStack {
+            (colorScheme == .dark ? Color.black : Color.white)
+                .ignoresSafeArea()
+            
+            if state.isWeatherAtmosphereEnabled {
+                HomeWeatherAtmosphereView(mode: state.weatherAtmosphereMode)
+            }
+            
+            ScrollView(.vertical, showsIndicators: true) {
+                VStack(alignment: .leading, spacing: 26) {
                 // MARK: - Double-Click Top Window Header (Windowed Fullscreen Zoom)
                 Color.clear
                     .frame(height: 20)
@@ -127,8 +136,8 @@ public struct HomeView: View {
                     HomeWeatherClockWidgetView()
                 }
                 
-                // MARK: - "Continue where you left off" Hero Section
-                if let doc = state.lastOpenedDocument {
+                // MARK: - "Continue where you left off" Hero Section (Always expanded when enabled)
+                if state.showContinueSection, let doc = state.lastOpenedDocument {
                     VStack(alignment: .leading, spacing: 8) {
                         HStack(spacing: 6) {
                             Image(systemName: "clock.arrow.circlepath")
@@ -206,222 +215,320 @@ public struct HomeView: View {
                     .transition(.opacity.combined(with: .move(edge: .top)))
                 }
                 
-                // MARK: - Recently Used Section (Collapsible!)
-                VStack(alignment: .leading, spacing: 12) {
-                    Button(action: {
-                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                            state.isRecentlyUsedCollapsed.toggle()
-                        }
-                    }) {
-                        HStack(spacing: 8) {
-                            Text("Recently Used")
-                                .font(.system(size: 15, weight: .bold, design: .rounded))
-                                .foregroundStyle(.primary)
-                            
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 11, weight: .bold))
-                                .foregroundStyle(.secondary)
-                                .rotationEffect(.degrees(state.isRecentlyUsedCollapsed ? 0 : 90))
-                            
-                            Spacer()
-                            
-                            if state.isRecentlyUsedCollapsed && !state.recentlyUsedApps.isEmpty {
-                                Text("\(state.recentlyUsedApps.count) apps")
+                // MARK: - Recent & Offline Documents Section (Collapsible + Toggleable in Settings)
+                if state.showOfflineDocsSection && !offlineManager.trackedDocuments.isEmpty {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Button(action: {
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                state.isOfflineDocsCollapsed.toggle()
+                            }
+                        }) {
+                            HStack(spacing: 8) {
+                                Image(systemName: "doc.text.fill")
+                                    .font(.system(size: 13, weight: .bold))
+                                    .foregroundStyle(Color(hex: "1A73E8"))
+                                
+                                Text("Recent & Offline Documents")
+                                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                                    .foregroundStyle(.primary)
+                                
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 11, weight: .bold))
+                                    .foregroundStyle(.secondary)
+                                    .rotationEffect(.degrees(state.isOfflineDocsCollapsed ? 0 : 90))
+                                
+                                Spacer()
+                                
+                                Text("\(offlineManager.trackedDocuments.count) available")
                                     .font(.system(size: 11, weight: .medium))
                                     .foregroundStyle(.secondary)
                                     .padding(.horizontal, 8)
                                     .padding(.vertical, 2)
                                     .background(Capsule().fill(Color.primary.opacity(0.05)))
                             }
+                            .contentShape(Rectangle())
                         }
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    
-                    if !state.isRecentlyUsedCollapsed {
-                        if state.recentlyUsedApps.isEmpty {
-                            HStack(spacing: 12) {
-                                Image(systemName: "tray")
-                                    .font(.system(size: 18))
-                                    .foregroundStyle(.secondary)
-                                
-                                Text("No recently used apps")
-                                    .font(.system(size: 13, weight: .medium))
-                                    .foregroundStyle(.secondary)
-                                
-                                Spacer()
-                            }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 14)
-                            .background(
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .fill(Color.primary.opacity(0.03))
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .stroke(Color.primary.opacity(0.06), lineWidth: 1)
-                            )
-                            .transition(.opacity.combined(with: .move(edge: .top)))
-                        } else {
-                            LazyVGrid(columns: gridColumns, spacing: 12) {
-                                ForEach(state.recentlyUsedApps.prefix(state.hideTileTitles ? 8 : 4)) { app in
-                                    ModernQuarterIconTile(
-                                        app: app,
-                                        hideTitle: state.hideTileTitles,
-                                        onLaunch: { state.launchApp(app) },
-                                        onTogglePin: { state.togglePin(appId: app.id) },
-                                        onOpenSeparate: { state.openSeparateWindow(for: app) }
-                                    )
+                        .buttonStyle(.plain)
+                        
+                        if !state.isOfflineDocsCollapsed {
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 12) {
+                                    ForEach(offlineManager.trackedDocuments.prefix(10)) { doc in
+                                        Button(action: {
+                                            state.openDocument(url: doc.url, appId: doc.type)
+                                        }) {
+                                            HStack(spacing: 10) {
+                                                Image(systemName: doc.iconSymbol)
+                                                    .font(.system(size: 20))
+                                                    .foregroundStyle(doc.type == "sheets" ? Color(hex: "0F9D58") : (doc.type == "slides" ? Color(hex: "F4B400") : Color(hex: "4285F4")))
+                                                
+                                                VStack(alignment: .leading, spacing: 3) {
+                                                    Text(doc.title)
+                                                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                                                        .foregroundStyle(.primary)
+                                                        .lineLimit(1)
+                                                        .frame(maxWidth: 160, alignment: .leading)
+                                                    
+                                                    HStack(spacing: 4) {
+                                                        Circle()
+                                                            .fill(Color(hex: "34A853"))
+                                                            .frame(width: 6, height: 6)
+                                                        Text("Available offline")
+                                                            .font(.system(size: 10.5, weight: .medium))
+                                                            .foregroundStyle(.secondary)
+                                                    }
+                                                }
+                                            }
+                                            .padding(.horizontal, 14)
+                                            .padding(.vertical, 10)
+                                            .background(
+                                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                                    .fill(Color.primary.opacity(0.04))
+                                            )
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                                    .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+                                            )
+                                        }
+                                        .buttonStyle(.plain)
+                                        .contextMenu {
+                                            Button("Open Document") {
+                                                state.openDocument(url: doc.url, appId: doc.type)
+                                            }
+                                            Divider()
+                                            Button(role: .destructive) {
+                                                offlineManager.removeTrackedDocument(id: doc.id)
+                                            } label: {
+                                                Label("Remove from Recent & Offline", systemImage: "trash")
+                                            }
+                                        }
+                                    }
                                 }
+                                .padding(.vertical, 2)
                             }
-                            .animation(.spring(response: 0.38, dampingFraction: 0.78), value: state.hideTileTitles)
                             .transition(.opacity.combined(with: .move(edge: .top)))
                         }
                     }
                 }
                 
-                // MARK: - Pinned Apps Section (Drop Target for Drag & Drop Pinning)
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        HStack(spacing: 6) {
-                            Text("Pinned Apps")
-                                .font(.system(size: 15, weight: .bold, design: .rounded))
-                                .foregroundStyle(.primary)
-                            
-                            if isPinDropTargeted {
-                                Text("• Drop to Pin!")
-                                    .font(.system(size: 12, weight: .bold, design: .rounded))
-                                    .foregroundStyle(Color(hex: "1A73E8"))
+                // MARK: - Recently Used Section (Collapsible + Toggleable in Settings)
+                if state.showRecentlyUsedSection {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Button(action: {
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                state.isRecentlyUsedCollapsed.toggle()
                             }
-                        }
-                        
-                        Spacer()
-                        
-                        if !state.pinnedApps.isEmpty {
-                            Text("\(state.pinnedApps.count) pinned")
-                                .font(.system(size: 11))
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    
-                    ZStack {
-                        if state.pinnedApps.isEmpty {
-                            HStack(spacing: 12) {
-                                Image(systemName: isPinDropTargeted ? "arrow.down.circle.fill" : "pin")
-                                    .font(.system(size: 16))
-                                    .foregroundStyle(isPinDropTargeted ? Color(hex: "1A73E8") : .secondary)
-                                
-                                Text(isPinDropTargeted ? "Release to pin app to your dashboard!" : "Drag & drop apps here, or pin from the sidebar to access them quickly.")
-                                    .font(.system(size: 13, weight: .medium))
-                                    .foregroundStyle(isPinDropTargeted ? Color(hex: "1A73E8") : .secondary)
-                                
-                                Spacer()
-                            }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 16)
-                            .background(
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .fill(isPinDropTargeted ? Color(hex: "1A73E8").opacity(0.12) : Color.primary.opacity(0.03))
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .stroke(
-                                        isPinDropTargeted ? Color(hex: "1A73E8") : Color.primary.opacity(0.06),
-                                        style: StrokeStyle(lineWidth: isPinDropTargeted ? 2 : 1, dash: isPinDropTargeted ? [6, 4] : [])
-                                    )
-                            )
-                        } else {
-                            LazyVGrid(columns: gridColumns, spacing: 12) {
-                                ForEach(state.pinnedApps) { app in
-                                    ModernQuarterIconTile(
-                                        app: app,
-                                        hideTitle: state.hideTileTitles,
-                                        onLaunch: { state.launchApp(app) },
-                                        onTogglePin: { state.togglePin(appId: app.id) },
-                                        onOpenSeparate: { state.openSeparateWindow(for: app) }
-                                    )
-                                }
-                            }
-                            .padding(isPinDropTargeted ? 8 : 0)
-                            .background(
-                                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .fill(isPinDropTargeted ? Color(hex: "1A73E8").opacity(0.08) : Color.clear)
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .stroke(
-                                        isPinDropTargeted ? Color(hex: "1A73E8") : Color.clear,
-                                        style: StrokeStyle(lineWidth: 2, dash: [6, 4])
-                                    )
-                            )
-                            .animation(.spring(response: 0.38, dampingFraction: 0.78), value: state.hideTileTitles)
-                        }
-                    }
-                    .contentShape(Rectangle())
-                    .onDrop(
-                        of: [.utf8PlainText, .plainText, .text],
-                        delegate: PinnedAppsDropDelegate(isTargeted: $isPinDropTargeted) { appId in
-                            state.setPinned(appId: appId, pinned: true)
-                        }
-                    )
-                }
-                
-                // MARK: - Groups Section (Saved Multi-Window Overviews)
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        HStack(spacing: 8) {
-                            Text("Groups")
-                                .font(.system(size: 15, weight: .bold, design: .rounded))
-                                .foregroundStyle(.primary)
-                            
-                            GroupWindowIcon(size: 16)
-                        }
-                        
-                        Spacer()
-                        
-                        if !state.savedGroups.isEmpty {
-                            Text("\(state.savedGroups.count) saved")
-                                .font(.system(size: 11))
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    
-                    if state.savedGroups.isEmpty {
-                        // Empty State Explaining Groups
-                        HStack(spacing: 14) {
-                            GroupWindowIcon(size: 26)
-                            
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text("No Saved Groups Yet")
-                                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        }) {
+                            HStack(spacing: 8) {
+                                Text("Recently Used")
+                                    .font(.system(size: 15, weight: .bold, design: .rounded))
                                     .foregroundStyle(.primary)
                                 
-                                Text("Tile 2 to 4 apps in split-screen, then press ⌘S or choose File → Save Group to save your layout here for instant 1-click launch.")
-                                    .font(.system(size: 11.5))
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 11, weight: .bold))
                                     .foregroundStyle(.secondary)
+                                    .rotationEffect(.degrees(state.isRecentlyUsedCollapsed ? 0 : 90))
+                                
+                                Spacer()
+                                
+                                if !state.recentlyUsedApps.isEmpty {
+                                    Text("\(state.recentlyUsedApps.count) apps")
+                                        .font(.system(size: 11, weight: .medium))
+                                        .foregroundStyle(.secondary)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 2)
+                                        .background(Capsule().fill(Color.primary.opacity(0.05)))
+                                }
                             }
-                            
-                            Spacer()
+                            .contentShape(Rectangle())
                         }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 14)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(Color.primary.opacity(0.03))
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .stroke(Color.primary.opacity(0.06), lineWidth: 1)
-                        )
-                    } else {
-                        LazyVGrid(columns: gridColumns, spacing: 14) {
-                            ForEach(state.savedGroups) { group in
-                                SavedGroupTileView(
-                                    group: group,
-                                    state: state,
-                                    hideTitle: state.hideTileTitles
+                        .buttonStyle(.plain)
+                        
+                        if !state.isRecentlyUsedCollapsed {
+                            if state.recentlyUsedApps.isEmpty {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "tray")
+                                        .font(.system(size: 18))
+                                        .foregroundStyle(.secondary)
+                                    
+                                    Text("No recently used apps")
+                                        .font(.system(size: 13, weight: .medium))
+                                        .foregroundStyle(.secondary)
+                                    
+                                    Spacer()
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 14)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        .fill(Color.primary.opacity(0.03))
                                 )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+                                )
+                                .transition(.opacity.combined(with: .move(edge: .top)))
+                            } else {
+                                LazyVGrid(columns: gridColumns, spacing: 12) {
+                                    ForEach(state.recentlyUsedApps.prefix(state.hideTileTitles ? 8 : 4)) { app in
+                                        ModernQuarterIconTile(
+                                            app: app,
+                                            hideTitle: state.hideTileTitles,
+                                            onLaunch: { state.launchApp(app) },
+                                            onTogglePin: { state.togglePin(appId: app.id) },
+                                            onOpenSeparate: { state.openSeparateWindow(for: app) }
+                                        )
+                                    }
+                                }
+                                .animation(.spring(response: 0.38, dampingFraction: 0.78), value: state.hideTileTitles)
+                                .transition(.opacity.combined(with: .move(edge: .top)))
                             }
+                        }
+                    }
+                }
+                
+                // MARK: - Pinned Apps Section (Collapsible + Auto-Hides When Empty)
+                if !state.pinnedApps.isEmpty || isPinDropTargeted {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Button(action: {
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                state.isPinnedAppsCollapsed.toggle()
+                            }
+                        }) {
+                            HStack(spacing: 8) {
+                                Text("Pinned Apps")
+                                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                                    .foregroundStyle(.primary)
+                                
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 11, weight: .bold))
+                                    .foregroundStyle(.secondary)
+                                    .rotationEffect(.degrees(state.isPinnedAppsCollapsed ? 0 : 90))
+                                
+                                if isPinDropTargeted {
+                                    Text("• Drop to Pin!")
+                                        .font(.system(size: 12, weight: .bold, design: .rounded))
+                                        .foregroundStyle(Color(hex: "1A73E8"))
+                                }
+                                
+                                Spacer()
+                                
+                                if !state.pinnedApps.isEmpty {
+                                    Text("\(state.pinnedApps.count) pinned")
+                                        .font(.system(size: 11, weight: .medium))
+                                        .foregroundStyle(.secondary)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 2)
+                                        .background(Capsule().fill(Color.primary.opacity(0.05)))
+                                }
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        
+                        if !state.isPinnedAppsCollapsed || isPinDropTargeted {
+                            ZStack {
+                                if state.pinnedApps.isEmpty {
+                                    HStack(spacing: 12) {
+                                        Image(systemName: "arrow.down.circle.fill")
+                                            .font(.system(size: 16))
+                                            .foregroundStyle(Color(hex: "1A73E8"))
+                                        
+                                        Text("Release to pin app to your dashboard!")
+                                            .font(.system(size: 13, weight: .medium))
+                                            .foregroundStyle(Color(hex: "1A73E8"))
+                                        
+                                        Spacer()
+                                    }
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 16)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                            .fill(Color(hex: "1A73E8").opacity(0.12))
+                                    )
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                            .stroke(
+                                                Color(hex: "1A73E8"),
+                                                style: StrokeStyle(lineWidth: 2, dash: [6, 4])
+                                            )
+                                    )
+                                } else {
+                                    LazyVGrid(columns: gridColumns, spacing: 12) {
+                                        ForEach(state.pinnedApps) { app in
+                                            ModernQuarterIconTile(
+                                                app: app,
+                                                hideTitle: state.hideTileTitles,
+                                                onLaunch: { state.launchApp(app) },
+                                                onTogglePin: { state.togglePin(appId: app.id) },
+                                                onOpenSeparate: { state.openSeparateWindow(for: app) }
+                                            )
+                                        }
+                                    }
+                                    .padding(isPinDropTargeted ? 8 : 0)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                            .fill(isPinDropTargeted ? Color(hex: "1A73E8").opacity(0.08) : Color.clear)
+                                    )
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                            .stroke(
+                                                isPinDropTargeted ? Color(hex: "1A73E8") : Color.clear,
+                                                style: StrokeStyle(lineWidth: 2, dash: [6, 4])
+                                            )
+                                    )
+                                    .animation(.spring(response: 0.38, dampingFraction: 0.78), value: state.hideTileTitles)
+                                }
+                            }
+                            .transition(.opacity.combined(with: .move(edge: .top)))
+                        }
+                    }
+                }
+                
+                // MARK: - Groups Section (Collapsible + Auto-Hides When Empty)
+                if !state.savedGroups.isEmpty {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Button(action: {
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                state.isGroupsCollapsed.toggle()
+                            }
+                        }) {
+                            HStack(spacing: 8) {
+                                Text("Groups")
+                                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                                    .foregroundStyle(.primary)
+                                
+                                GroupWindowIcon(size: 16)
+                                
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 11, weight: .bold))
+                                    .foregroundStyle(.secondary)
+                                    .rotationEffect(.degrees(state.isGroupsCollapsed ? 0 : 90))
+                                
+                                Spacer()
+                                
+                                Text("\(state.savedGroups.count) saved")
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundStyle(.secondary)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 2)
+                                    .background(Capsule().fill(Color.primary.opacity(0.05)))
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        
+                        if !state.isGroupsCollapsed {
+                            LazyVGrid(columns: gridColumns, spacing: 14) {
+                                ForEach(state.savedGroups) { group in
+                                    SavedGroupTileView(
+                                        group: group,
+                                        state: state,
+                                        hideTitle: state.hideTileTitles
+                                    )
+                                }
+                            }
+                            .transition(.opacity.combined(with: .move(edge: .top)))
                         }
                     }
                 }
@@ -431,10 +538,13 @@ public struct HomeView: View {
             .padding(.horizontal, 30)
             .padding(.bottom, 32)
         }
-        .background(
-            colorScheme == .dark
-                ? Color.black
-                : Color.white
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onDrop(
+            of: [.utf8PlainText, .plainText, .text],
+            delegate: PinnedAppsDropDelegate(isTargeted: $isPinDropTargeted) { appId in
+                state.setPinned(appId: appId, pinned: true)
+            }
         )
     }
 }

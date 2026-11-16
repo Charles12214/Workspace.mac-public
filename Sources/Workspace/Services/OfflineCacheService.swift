@@ -26,17 +26,33 @@ public final class OfflineCacheService: NSObject, WKNavigationDelegate {
     
     /// Pre-warms and downloads offline application caches for Google Workspace apps in the background
     public func prewarmOfflineCache() {
-        guard !isPrewarming else { return }
+        guard !isPrewarming && !OfflineManager.shared.isOffline && AppState.shared.hasCompletedSetup else { return }
         isPrewarming = true
         
-        let config = WKWebViewConfiguration()
-        config.websiteDataStore = WKWebsiteDataStore.default()
-        config.applicationNameForUserAgent = "Version/27.2 Safari/605.1.15"
-        
-        let urls = coreOfflineEndpoints.compactMap { URL(string: $0) }
-        self.pendingUrls = urls
-        
-        loadNextUrl(with: config)
+        Task { @MainActor [weak self] in
+            guard let self = self else { return }
+            let cookies = await AppState.shared.activeDataStore.httpCookieStore.allCookies()
+            let hasSession = cookies.contains { cookie in
+                (cookie.name == "SID" || cookie.name == "__Secure-1PSID") &&
+                cookie.domain.lowercased().contains("google.")
+            }
+            
+            // Never hit Workspace URLs with a Chrome UA when logged out: the 302 to
+            // accounts.google.com would plant a Chrome-tainted __Host-GAPS BotGuard cookie.
+            guard hasSession, !OfflineManager.shared.isOffline else {
+                self.isPrewarming = false
+                return
+            }
+            
+            let config = WKWebViewConfiguration()
+            config.websiteDataStore = AppState.shared.activeDataStore
+            config.userContentController.addUserScript(OfflineSuiteInjector.makeUserScript())
+            
+            let urls = self.coreOfflineEndpoints.compactMap { URL(string: $0) }
+            self.pendingUrls = urls
+            
+            self.loadNextUrl(with: config)
+        }
     }
     
     private func loadNextUrl(with config: WKWebViewConfiguration) {
@@ -52,12 +68,23 @@ public final class OfflineCacheService: NSObject, WKNavigationDelegate {
         let nextUrl = pendingUrls.removeFirst()
         if prewarmWebView == nil {
             let wv = WKWebView(frame: NSRect(x: 0, y: 0, width: 800, height: 600), configuration: config)
+            wv.customUserAgent = WebKitRepresentable.chromeWorkspaceUserAgent
             wv.navigationDelegate = self
             prewarmWebView = wv
         }
         
-        let req = URLRequest(url: nextUrl, cachePolicy: .returnCacheDataElseLoad, timeoutInterval: 15)
+        let req = URLRequest(url: nextUrl, cachePolicy: .useProtocolCachePolicy, timeoutInterval: 15)
         prewarmWebView?.load(req)
+    }
+    
+    public func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping @MainActor (WKNavigationActionPolicy) -> Void) {
+        if let url = navigationAction.request.url, WebKitRepresentable.isGoogleAuthURL(url) {
+            decisionHandler(.cancel)
+            pendingUrls.removeAll()
+            loadNextUrl(with: webView.configuration)
+            return
+        }
+        decisionHandler(.allow)
     }
     
     public func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {

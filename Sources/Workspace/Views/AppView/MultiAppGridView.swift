@@ -323,6 +323,7 @@ public struct TiledAppPaneView: View {
     @ObservedObject public var state: AppState
     public let isSingleApp: Bool
     public let paneIndex: Int
+    @ObservedObject private var offlineManager = OfflineManager.shared
     
     @State private var webView: WKWebView? = nil
     @State private var canGoBack: Bool = false
@@ -372,9 +373,9 @@ public struct TiledAppPaneView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 
                 // Ambient Offline or Sync Indicator in multi-pane
-                if OfflineManager.shared.isSyncingToCloud {
+                if offlineManager.isSyncingToCloud {
                     HStack(spacing: 6) {
-                        if OfflineManager.shared.syncIsComplete {
+                        if offlineManager.syncIsComplete {
                             Image(systemName: "checkmark.circle.fill")
                                 .font(.system(size: 11, weight: .bold))
                                 .foregroundStyle(Color(hex: "34A853"))
@@ -383,7 +384,7 @@ public struct TiledAppPaneView: View {
                                 .scaleEffect(0.65)
                                 .frame(width: 12, height: 12)
                         }
-                        Text(OfflineManager.shared.syncMessage)
+                        Text(offlineManager.syncMessage)
                             .font(.system(size: 10.5, weight: .bold, design: .rounded))
                             .foregroundStyle(Color.primary)
                     }
@@ -391,9 +392,9 @@ public struct TiledAppPaneView: View {
                     .padding(.vertical, 4)
                     .background(.ultraThinMaterial)
                     .clipShape(Capsule())
-                    .overlay(Capsule().stroke(OfflineManager.shared.syncIsComplete ? Color(hex: "34A853").opacity(0.4) : Color.primary.opacity(0.12), lineWidth: 1))
+                    .overlay(Capsule().stroke(offlineManager.syncIsComplete ? Color(hex: "34A853").opacity(0.4) : Color.primary.opacity(0.12), lineWidth: 1))
                     .padding(.top, 6)
-                } else if OfflineManager.shared.isOffline {
+                } else if offlineManager.isOffline {
                     HStack(spacing: 5) {
                         Image(systemName: "wifi.slash")
                             .font(.system(size: 9, weight: .bold))
@@ -411,11 +412,57 @@ public struct TiledAppPaneView: View {
                 }
                 
                 // Loading line
-                if isLoading && !OfflineManager.shared.isOffline {
+                if isLoading && !offlineManager.isOffline {
                     ProgressView()
                         .progressViewStyle(.linear)
                         .frame(height: 2)
                         .accentColor(app.primaryColor)
+                }
+                
+                // MARK: - Offline Navigation Fallback (OfflineSuite.mac)
+                if isOfflineError && offlineManager.isOffline {
+                    VStack {
+                        Spacer()
+                        VStack(spacing: 16) {
+                            Image(systemName: "wifi.slash")
+                                .font(.system(size: 40))
+                                .foregroundStyle(.secondary)
+                            Text("You're offline")
+                                .font(.system(size: 18, weight: .bold, design: .rounded))
+                            Text("Open a document from Google Docs' offline view, or retry when connected.")
+                                .font(.system(size: 13))
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.center)
+                            HStack(spacing: 12) {
+                                Button(action: {
+                                    isOfflineError = false
+                                    isLoading = true
+                                    let targetUrl = state.overrideUrlForApp[app.id] ?? app.resolvedUrl(for: state.userProfile.email)
+                                    var req = URLRequest(url: targetUrl)
+                                    req.cachePolicy = .returnCacheDataElseLoad
+                                    webView?.load(req)
+                                }) {
+                                    Label("Load Cached", systemImage: "arrow.clockwise")
+                                        .font(.system(size: 13, weight: .semibold))
+                                }
+                                .buttonStyle(.borderedProminent)
+                                
+                                Button(action: {
+                                    state.goHome()
+                                }) {
+                                    Label("Home", systemImage: "house.fill")
+                                        .font(.system(size: 13, weight: .semibold))
+                                }
+                                .buttonStyle(.bordered)
+                            }
+                        }
+                        .padding(40)
+                        Spacer()
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color(nsColor: .windowBackgroundColor))
+                    .zIndex(25)
+                    .transition(.opacity)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)

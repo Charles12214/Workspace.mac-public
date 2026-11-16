@@ -50,7 +50,8 @@ public final class AppState: ObservableObject {
     @Published public var activeGroupId: String? = nil
     @Published public var activeGroupName: String = "Unsaved Group"
     
-    // Group Modal Triggers
+    // Sheet & Modal Triggers
+    @Published public var showingSettings: Bool = false
     @Published public var showingSaveGroupModal: Bool = false
     @Published public var showingRenameGroupModal: Bool = false
     @Published public var groupModalInputName: String = ""
@@ -98,9 +99,42 @@ public final class AppState: ObservableObject {
         didSet { UserDefaults.standard.set(isSidebarCollapsed, forKey: kIsSidebarCollapsedKey) }
     }
     
-    // Recently Used section collapsible state
+    // Home Screen section collapsible states
+    @Published public var isOfflineDocsCollapsed: Bool {
+        didSet { UserDefaults.standard.set(isOfflineDocsCollapsed, forKey: "isOfflineDocsCollapsed") }
+    }
+    
     @Published public var isRecentlyUsedCollapsed: Bool {
         didSet { UserDefaults.standard.set(isRecentlyUsedCollapsed, forKey: "isRecentlyUsedCollapsed") }
+    }
+    
+    @Published public var isPinnedAppsCollapsed: Bool {
+        didSet { UserDefaults.standard.set(isPinnedAppsCollapsed, forKey: "isPinnedAppsCollapsed") }
+    }
+    
+    @Published public var isGroupsCollapsed: Bool {
+        didSet { UserDefaults.standard.set(isGroupsCollapsed, forKey: "isGroupsCollapsed") }
+    }
+    
+    // Home Screen section visibility & dynamic atmosphere settings
+    @Published public var showContinueSection: Bool {
+        didSet { UserDefaults.standard.set(showContinueSection, forKey: "Workspace_ShowContinueSection") }
+    }
+    
+    @Published public var showOfflineDocsSection: Bool {
+        didSet { UserDefaults.standard.set(showOfflineDocsSection, forKey: "Workspace_ShowOfflineDocsSection") }
+    }
+    
+    @Published public var showRecentlyUsedSection: Bool {
+        didSet { UserDefaults.standard.set(showRecentlyUsedSection, forKey: "Workspace_ShowRecentlyUsedSection") }
+    }
+    
+    @Published public var isWeatherAtmosphereEnabled: Bool {
+        didSet { UserDefaults.standard.set(isWeatherAtmosphereEnabled, forKey: "Workspace_WeatherAtmosphereEnabled") }
+    }
+    
+    @Published public var weatherAtmosphereMode: WeatherAtmosphereMode {
+        didSet { UserDefaults.standard.set(weatherAtmosphereMode.rawValue, forKey: "Workspace_WeatherAtmosphereMode") }
     }
     
     // App viewing layout mode (Everything, Essentials [Default], Minimalist ["At a glance"])
@@ -192,7 +226,7 @@ public final class AppState: ObservableObject {
             } else if path.contains("/forms") {
                 return apps.first(where: { $0.id == "forms" })
             } else {
-                return apps.first(where: { $0.id == "docs" })
+                return nil
             }
         } else if host.contains("sheets.google.com") {
             return apps.first(where: { $0.id == "sheets" })
@@ -236,7 +270,9 @@ public final class AppState: ObservableObject {
     // MARK: - Dynamic Auto App Swapping Detection
     public func notifyUrlChanged(sourceAppId: String, newUrlString: String) {
         guard let detectedApp = app(for: newUrlString) else { return }
-        if detectedApp.id != sourceAppId {
+        // Only transfer if opening a document from inside Drive (Drive -> Docs/Sheets/Slides)
+        // Never swap or hijack when navigating within Docs, Sheets, or Slides
+        if detectedApp.id != sourceAppId && sourceAppId == "drive" {
             // Seamlessly transfer the active WKWebView in WebKitPool so the user's document session is preserved
             WebKitPool.shared.transferWebView(fromAppId: sourceAppId, toAppId: detectedApp.id, accountId: activeAccountId)
             
@@ -295,7 +331,22 @@ public final class AppState: ObservableObject {
         self.hasCompletedSetup = UserDefaults.standard.bool(forKey: kHasCompletedSetupKey)
         self.hideTileTitles = UserDefaults.standard.bool(forKey: kHideTileTitlesKey)
         self.isSidebarCollapsed = UserDefaults.standard.bool(forKey: kIsSidebarCollapsedKey)
+        self.isOfflineDocsCollapsed = UserDefaults.standard.bool(forKey: "isOfflineDocsCollapsed")
         self.isRecentlyUsedCollapsed = UserDefaults.standard.bool(forKey: "isRecentlyUsedCollapsed")
+        self.isPinnedAppsCollapsed = UserDefaults.standard.bool(forKey: "isPinnedAppsCollapsed")
+        self.isGroupsCollapsed = UserDefaults.standard.bool(forKey: "isGroupsCollapsed")
+        
+        self.showContinueSection = UserDefaults.standard.object(forKey: "Workspace_ShowContinueSection") as? Bool ?? true
+        self.showOfflineDocsSection = UserDefaults.standard.object(forKey: "Workspace_ShowOfflineDocsSection") as? Bool ?? true
+        self.showRecentlyUsedSection = UserDefaults.standard.object(forKey: "Workspace_ShowRecentlyUsedSection") as? Bool ?? true
+        self.isWeatherAtmosphereEnabled = UserDefaults.standard.object(forKey: "Workspace_WeatherAtmosphereEnabled") as? Bool ?? true
+        
+        if let rawAtmosphere = UserDefaults.standard.string(forKey: "Workspace_WeatherAtmosphereMode"),
+           let atmosphere = WeatherAtmosphereMode(rawValue: rawAtmosphere) {
+            self.weatherAtmosphereMode = atmosphere
+        } else {
+            self.weatherAtmosphereMode = .auto
+        }
         
         // Load App View Mode (defaults to Essentials)
         if let rawMode = UserDefaults.standard.string(forKey: "appViewMode"),
@@ -434,7 +485,7 @@ public final class AppState: ObservableObject {
                 name: "Google Docs",
                 category: .productivity,
                 appDescription: "Create, edit, and collaborate on documents in real time.",
-                urlString: "https://docs.google.com",
+                urlString: "https://docs.google.com/document/u/0/",
                 newDocUrlString: "https://docs.new",
                 iconSymbol: "doc.text.fill",
                 colorHex: "4285F4",
@@ -446,7 +497,7 @@ public final class AppState: ObservableObject {
                 name: "Google Sheets",
                 category: .productivity,
                 appDescription: "Smart spreadsheets with automated data insights and Gemini tools.",
-                urlString: "https://sheets.google.com",
+                urlString: "https://docs.google.com/spreadsheets/u/0/",
                 newDocUrlString: "https://sheets.new",
                 iconSymbol: "tablecells.fill",
                 colorHex: "0F9D58",
@@ -458,7 +509,7 @@ public final class AppState: ObservableObject {
                 name: "Google Slides",
                 category: .productivity,
                 appDescription: "Stunning presentations with intelligent themes and transitions.",
-                urlString: "https://slides.google.com",
+                urlString: "https://docs.google.com/presentation/u/0/",
                 newDocUrlString: "https://slides.new",
                 iconSymbol: "play.rectangle.fill",
                 colorHex: "F4B400",
@@ -470,7 +521,7 @@ public final class AppState: ObservableObject {
                 name: "Google Drive",
                 category: .storageAndAdmin,
                 appDescription: "Secure cloud file storage, synchronisation, and quick file sharing.",
-                urlString: "https://drive.google.com",
+                urlString: "https://drive.google.com/drive/u/0/my-drive",
                 newDocUrlString: "https://drive.google.com/drive/my-drive",
                 iconSymbol: "externaldrive.fill",
                 colorHex: "34A853",
@@ -851,6 +902,21 @@ public final class AppState: ObservableObject {
         launchApp(app)
     }
     
+    public func openDocument(url urlString: String, appId: String) {
+        guard let app = apps.first(where: { $0.id == appId }) ?? apps.first(where: { $0.id == "docs" }) else {
+            return
+        }
+        guard let targetUrl = URL(string: urlString) else { return }
+        
+        if appViewMode == .separated {
+            openSeparateWindow(for: app, customUrl: targetUrl)
+            return
+        }
+        
+        overrideUrlForApp[app.id] = targetUrl
+        launchApp(app)
+    }
+    
     public func recordRecentDocument(appId: String, appName: String, title: String, urlString: String) {
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedTitle.isEmpty,
@@ -1116,6 +1182,7 @@ public final class AppState: ObservableObject {
         }
     }
     
+    /// Returns an isolated persistent WKWebsiteDataStore per account so Google session cookies never leak across accounts.
     public func dataStore(for account: UserProfile) -> WKWebsiteDataStore {
         if #available(macOS 14.0, *) {
             return WKWebsiteDataStore(forIdentifier: account.dataStoreUuid)
@@ -1225,6 +1292,147 @@ public final class AppState: ObservableObject {
     public func resetSetup() {
         hasCompletedSetup = false
         selectedAppId = nil
+        WeatherService.shared.isWeatherEnabled = false
+    }
+    
+    // MARK: - Fresh Reset Actions
+    /// Clears all site data and cookies (including HttpOnly session cookies) from an isolated data store.
+    private func purgeWebsiteData(for store: WKWebsiteDataStore, completion: (@MainActor @Sendable () -> Void)? = nil) {
+        let dataTypes = WKWebsiteDataStore.allWebsiteDataTypes()
+        store.removeData(ofTypes: dataTypes, modifiedSince: Date.distantPast) {
+            let cookieStore = store.httpCookieStore
+            cookieStore.getAllCookies { cookies in
+                let group = DispatchGroup()
+                for cookie in cookies {
+                    group.enter()
+                    cookieStore.delete(cookie) {
+                        group.leave()
+                    }
+                }
+                group.notify(queue: .main) {
+                    Task { @MainActor in
+                        completion?()
+                    }
+                }
+            }
+        }
+    }
+    
+    /// Wipes only the active account's WebKit session and state, keeping other saved accounts intact if present.
+    public func freshResetCurrentAccount() {
+        let targetAccountId = activeAccountId
+        let targetStore = activeDataStore
+        
+        WebKitPool.shared.clearAccount(accountId: targetAccountId)
+        purgeWebsiteData(for: targetStore) {
+            HTTPCookieStorage.shared.removeCookies(since: .distantPast)
+            URLCache.shared.removeAllCachedResponses()
+        }
+        
+        if accounts.count > 1, let idx = accounts.firstIndex(where: { $0.accountId == targetAccountId }) {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                accounts.remove(at: idx)
+                activeAccountId = accounts.first?.accountId ?? ""
+                selectedAppId = nil
+                tiledAppIds = []
+                focusedTiledAppId = nil
+                activeGroupId = nil
+                activeGroupName = "Unsaved Group"
+            }
+            saveAccounts()
+            showingSettings = false
+        } else {
+            purgeWebsiteData(for: WKWebsiteDataStore.default())
+            WebKitPool.shared.clearAll()
+            OfflineManager.shared.clearTrackedDocuments()
+            lastOpenedDocument = nil
+            UserDefaults.standard.removeObject(forKey: kLastOpenedDocumentKey)
+            
+            var freshProfile = UserProfile.default
+            freshProfile.accountId = UUID().uuidString
+            freshProfile.dataStoreUuid = UUID()
+            accounts = [freshProfile]
+            activeAccountId = freshProfile.accountId
+            saveAccounts()
+            
+            selectedAppId = nil
+            tiledAppIds = []
+            focusedTiledAppId = nil
+            activeGroupId = nil
+            activeGroupName = "Unsaved Group"
+            showingSettings = false
+            hasCompletedSetup = false
+        }
+    }
+    
+    /// Wipes all accounts' WebKit stores, preferences, tracked offline items, and encrypted weather locations, returning to setup.
+    public func freshResetAllAccounts() {
+        let stores = accounts.map { dataStore(for: $0) }
+        WebKitPool.shared.clearAll()
+        
+        for store in stores {
+            purgeWebsiteData(for: store)
+        }
+        purgeWebsiteData(for: WKWebsiteDataStore.default()) {
+            HTTPCookieStorage.shared.removeCookies(since: .distantPast)
+            URLCache.shared.removeAllCachedResponses()
+        }
+        
+        OfflineManager.shared.clearTrackedDocuments()
+        WeatherService.shared.resetAllWeatherLocationsAndSettings()
+        
+        let keysToReset = [
+            kRecentlyUsedKey,
+            kPinnedAppsKey,
+            kUserProfileKey,
+            kAccountsKey,
+            kActiveAccountIdKey,
+            kSavedGroupsKey,
+            kLastOpenedDocumentKey,
+            kHasCompletedSetupKey,
+            kHideTileTitlesKey,
+            "isOfflineDocsCollapsed",
+            "isRecentlyUsedCollapsed",
+            "isPinnedAppsCollapsed",
+            "isGroupsCollapsed",
+            "Workspace_ShowContinueSection",
+            "Workspace_ShowOfflineDocsSection",
+            "Workspace_ShowRecentlyUsedSection",
+            "Workspace_WeatherAtmosphereEnabled",
+            "Workspace_WeatherAtmosphereMode"
+        ]
+        for key in keysToReset {
+            UserDefaults.standard.removeObject(forKey: key)
+        }
+        
+        apps = Self.defaultAppsCatalog()
+        savedGroups = []
+        tiledAppIds = []
+        selectedAppId = nil
+        focusedTiledAppId = nil
+        activeGroupId = nil
+        activeGroupName = "Unsaved Group"
+        lastOpenedDocument = nil
+        hideTileTitles = false
+        showContinueSection = true
+        showOfflineDocsSection = true
+        showRecentlyUsedSection = true
+        isOfflineDocsCollapsed = false
+        isRecentlyUsedCollapsed = false
+        isPinnedAppsCollapsed = false
+        isGroupsCollapsed = false
+        isWeatherAtmosphereEnabled = true
+        weatherAtmosphereMode = .auto
+        
+        var freshProfile = UserProfile.default
+        freshProfile.accountId = UUID().uuidString
+        freshProfile.dataStoreUuid = UUID()
+        accounts = [freshProfile]
+        activeAccountId = freshProfile.accountId
+        saveAccounts()
+        
+        showingSettings = false
+        hasCompletedSetup = false
     }
     
     // MARK: - Single Account Sign-In
@@ -1233,7 +1441,7 @@ public final class AppState: ObservableObject {
         email: String,
         usePasskey: Bool = false,
         tier: SubscriptionTier = .aiPro,
-        completion: (() -> Void)? = nil
+        completion: (@MainActor @Sendable () -> Void)? = nil
     ) {
         let finalEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !finalEmail.isEmpty else { return }
@@ -1246,52 +1454,38 @@ public final class AppState: ObservableObject {
         let first = parts.first.map(String.init) ?? finalName
         let last = parts.count > 1 ? parts.dropFirst().joined(separator: " ") : ""
         
-        // Clear previous cookies so Google starts clean for the new account
-        clearWebKitCookies { [weak self] in
-            guard let self = self else { return }
-            self.userProfile = UserProfile(
-                name: finalName,
-                firstName: first,
-                lastName: last,
-                nickname: "",
-                useNickname: false,
-                email: finalEmail,
-                avatarUrl: nil,
-                avatarImageData: nil,
-                tier: tier,
-                isLoggedIn: true,
-                hasPasskey: usePasskey
-            )
-            self.saveUserProfile()
-            if self.selectedAppId != nil {
-                self.webViewActionSignal = .reload
-            }
-            completion?()
+        // Preserve the active account's dataStoreUuid/accountId so cookies earned during sign-in survive.
+        let existing = self.userProfile
+        self.userProfile = UserProfile(
+            accountId: existing.accountId,
+            dataStoreUuid: existing.dataStoreUuid,
+            accountLabel: existing.accountLabel,
+            name: finalName,
+            firstName: first,
+            lastName: last,
+            nickname: "",
+            useNickname: false,
+            email: finalEmail,
+            avatarUrl: nil,
+            avatarImageData: nil,
+            tier: tier,
+            isLoggedIn: true,
+            hasPasskey: usePasskey
+        )
+        self.saveUserProfile()
+        if self.selectedAppId != nil {
+            self.webViewActionSignal = .reload
         }
+        completion?()
     }
     
     // MARK: - Thorough WebKit & Cookie Purge (Active Account)
-    public func clearWebKitCookies(completion: (() -> Void)? = nil) {
-        let dataStore = activeDataStore
-        let dataTypes = WKWebsiteDataStore.allWebsiteDataTypes()
-        
-        dataStore.removeData(ofTypes: dataTypes, modifiedSince: Date.distantPast) {
-            let cookieStore = dataStore.httpCookieStore
-            cookieStore.getAllCookies { cookies in
-                let group = DispatchGroup()
-                for cookie in cookies {
-                    group.enter()
-                    cookieStore.delete(cookie) {
-                        group.leave()
-                    }
-                }
-                group.notify(queue: .main) {
-                    HTTPCookieStorage.shared.removeCookies(since: .distantPast)
-                    URLCache.shared.removeAllCachedResponses()
-                    print("Workspace: All WebKit cookies, caches, and Google sessions purged for active account.")
-                    completion?()
-                }
-            }
+    public func clearWebKitCookies(completion: (@MainActor @Sendable () -> Void)? = nil) {
+        purgeWebsiteData(for: activeDataStore) {
+            HTTPCookieStorage.shared.removeCookies(since: .distantPast)
+            URLCache.shared.removeAllCachedResponses()
+            print("Workspace: All WebKit cookies, caches, and Google sessions purged for active account.")
+            completion?()
         }
     }
     

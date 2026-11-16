@@ -359,6 +359,31 @@ public enum AppearanceMode: String, CaseIterable, Codable, Identifiable, Sendabl
     }
 }
 
+// MARK: - Dynamic Home Screen Weather Atmosphere Mode
+public enum WeatherAtmosphereMode: String, CaseIterable, Identifiable, Codable, Sendable {
+    case auto = "Auto (Live Weather)"
+    case clear = "Clear Glow"
+    case foggy = "Foggy & Cloudy"
+    case rain = "Rain Droplets"
+    case thunderstorm = "Thunderstorm"
+    case snow = "Snowing"
+    case frosty = "Frosty Crystals"
+    
+    public var id: String { rawValue }
+    
+    public var iconName: String {
+        switch self {
+        case .auto: return "sparkles"
+        case .clear: return "sun.max.fill"
+        case .foggy: return "cloud.fog.fill"
+        case .rain: return "cloud.rain.fill"
+        case .thunderstorm: return "cloud.bolt.rain.fill"
+        case .snow: return "snowflake"
+        case .frosty: return "thermometer.snowflake"
+        }
+    }
+}
+
 // MARK: - Color Hex Extension
 extension Color {
     public init(hex: String) {

@@ -3,7 +3,6 @@ import SwiftUI
 public struct ContentView: View {
     @StateObject private var state = AppState.shared
     @StateObject private var greetingManager = GreetingManager.shared
-    @State private var showingSettings: Bool = false
     @Environment(\.colorScheme) private var colorScheme
     
     public init() {}
@@ -16,15 +15,17 @@ public struct ContentView: View {
                         .background(VisualEffectBackground().ignoresSafeArea())
                 } else if let app = state.selectedApp {
                     // MARK: - App View Container (Everything, Essentials [Default], Minimalist ["At a glance"])
-                    WorkspaceAppContainer(app: app, state: state, showingSettings: $showingSettings)
+                    WorkspaceAppContainer(app: app, state: state, showingSettings: $state.showingSettings)
                         .id(state.isMultitaskingActive ? "multitasking_active" : app.id)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     // MARK: - Home Launcher View with Sidebar
                     HStack(spacing: 0) {
-                        SidebarView(state: state, showingSettings: $showingSettings)
+                        SidebarView(state: state, showingSettings: $state.showingSettings)
                         
-                        Divider().opacity(0.2)
+                        Divider()
+                            .opacity(0.2)
+                            .ignoresSafeArea(.container, edges: .top)
                         
                         HomeView(state: state, greetingManager: greetingManager)
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -68,9 +69,9 @@ public struct ContentView: View {
             }
         }
         .preferredColorScheme(state.effectiveColorScheme)
-        .sheet(isPresented: $showingSettings) {
+        .sheet(isPresented: $state.showingSettings) {
             SettingsView(state: state)
-                .frame(width: 640, height: 700)
+                .frame(width: 820, height: 600)
         }
         .frame(minWidth: 940, minHeight: 620)
     }

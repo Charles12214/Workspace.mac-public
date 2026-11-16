@@ -68,6 +68,7 @@ public struct WorkspaceAppContainer: View {
     public let app: WorkspaceAppItem
     @ObservedObject public var state: AppState
     @Binding public var showingSettings: Bool
+    @ObservedObject private var offlineManager = OfflineManager.shared
     
     @State private var webView: WKWebView? = nil
     @State private var canGoBack: Bool = false
@@ -186,7 +187,7 @@ public struct WorkspaceAppContainer: View {
                     
                     HStack(spacing: 0) {
                         SidebarView(state: state, showingSettings: $showingSettings)
-                            .frame(width: state.isSidebarCollapsed ? 58 : 260)
+                            .frame(width: state.isSidebarCollapsed ? 76 : 260)
                             .background(Color(nsColor: .windowBackgroundColor))
                             .shadow(color: Color.black.opacity(0.4), radius: 16, x: 6, y: 0)
                             .transition(.move(edge: .leading))
@@ -498,7 +499,7 @@ public struct WorkspaceAppContainer: View {
             WeatherTimeWidgetView()
             
             // MARK: - Ambient Offline Badge
-            if OfflineManager.shared.isOffline {
+            if offlineManager.isOffline {
                 HStack(spacing: 5) {
                     Image(systemName: "wifi.slash")
                         .font(.system(size: 11, weight: .bold))

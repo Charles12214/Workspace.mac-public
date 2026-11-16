@@ -3,6 +3,7 @@ set -e
 setopt +o nomatch 2>/dev/null || true
 
 killall Workspace 2>/dev/null || true
+killall Workspace.mac 2>/dev/null || true
 rm -f .build/out/Products/Release/Workspace.dSYM 2>/dev/null || true
 rm -rf .build/out/Products/Release/*.dSYM* 2>/dev/null || true
 rm -rf .build/out/Products/*/*dSYM* 2>/dev/null || true
@@ -11,7 +12,13 @@ find .build -name "*dSYM*" -exec rm -rf {} + 2>/dev/null || true
 sleep 0.5
 
 echo "🔨 Building Workspace for macOS (Release)..."
-export SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk
+export SDKROOT=$(xcrun --show-sdk-path)
+# Standalone CommandLineTools SDK 27.x omits libSwiftUIMacros.dylib; fall back to MacOSX26.sdk if needed.
+if [[ "$SDKROOT" == *"/CommandLineTools/"* ]] && \
+   [ ! -f "/Library/Developer/CommandLineTools/usr/lib/swift/host/plugins/libSwiftUIMacros.dylib" ] && \
+   [ -d "/Library/Developer/CommandLineTools/SDKs/MacOSX26.sdk" ]; then
+    export SDKROOT="/Library/Developer/CommandLineTools/SDKs/MacOSX26.sdk"
+fi
 BUILD_DIR="/tmp/workspace-build"
 
 swift build -c release --build-path "$BUILD_DIR"
@@ -43,10 +50,10 @@ if [ -d "Resources/Images" ]; then
     cp -r Resources/Images/* "${RESOURCES_DIR}/Images/"
 fi
 
-# Copy Extensions
-mkdir -p "${RESOURCES_DIR}/Extensions"
-if [ -d "Extensions" ]; then
-    cp -r Extensions/* "${RESOURCES_DIR}/Extensions/"
+# Copy Extensions (OfflineSuite only)
+mkdir -p "${RESOURCES_DIR}/Extensions/OfflineSuite"
+if [ -d "Extensions/OfflineSuite" ]; then
+    cp -r Extensions/OfflineSuite/* "${RESOURCES_DIR}/Extensions/OfflineSuite/"
 fi
 
 # Write Info.plist
@@ -62,9 +69,9 @@ cat <<EOF > "${CONTENTS_DIR}/Info.plist"
     <key>CFBundleIdentifier</key>
     <string>com.workspacemac.app</string>
     <key>CFBundleVersion</key>
-    <string>1.2.2</string>
+    <string>1.3.0</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.2.2</string>
+    <string>1.3.0</string>
     <key>CFBundleExecutable</key>
     <string>Workspace.mac</string>
     <key>CFBundleIconFile</key>
@@ -72,7 +79,7 @@ cat <<EOF > "${CONTENTS_DIR}/Info.plist"
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>LSMinimumSystemVersion</key>
-    <string>13.0</string>
+    <string>14.0</string>
     <key>NSHighResolutionCapable</key>
     <true/>
     <key>NSSupportsAutomaticGraphicsSwitching</key>
@@ -83,11 +90,8 @@ cat <<EOF > "${CONTENTS_DIR}/Info.plist"
     <string>Workspace requires camera access for Google Meet conferences.</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>Workspace requires microphone access for Google Meet and voice notes.</string>
-    <key>NSAppTransportSecurity</key>
-    <dict>
-        <key>NSAllowsArbitraryLoads</key>
-        <true/>
-    </dict>
+    <key>NSLocationWhenInUseUsageDescription</key>
+    <string>Workspace uses your location locally to fetch weather conditions for the ambient widget. Coordinates are encrypted on-device.</string>
 </dict>
 </plist>
 EOF
@@ -97,9 +101,6 @@ echo -n "APPL????" > "${CONTENTS_DIR}/PkgInfo"
 
 # Ad-hoc code signing for local macOS execution
 codesign --force --deep --sign - "${APP_DIR}" 2>/dev/null || true
-
-# Symlink Workspace.app for compatibility
-ln -sf "${APP_DIR}" "Workspace.app"
 
 echo "✨ Successfully built ${APP_DIR}!"
 echo "🚀 Run it with: open ${APP_DIR}"
