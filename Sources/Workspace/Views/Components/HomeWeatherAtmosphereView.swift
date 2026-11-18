@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 /// Animated dynamic background layer for the Home screen that adapts to live weather
 /// (or a user-selected WeatherAtmosphereMode preview) with low-overhead procedural Canvas rendering.
@@ -8,6 +9,7 @@ public struct HomeWeatherAtmosphereView: View {
     public let mode: WeatherAtmosphereMode
     @ObservedObject private var weatherService = WeatherService.shared
     @Environment(\.colorScheme) private var colorScheme
+    @State private var isAppActive: Bool = NSApplication.shared.isActive
     
     private static let virtualWidth: Double = 1800.0
     
@@ -62,8 +64,9 @@ public struct HomeWeatherAtmosphereView: View {
     public var body: some View {
         let activeMode = resolvedAtmosphere
         let isDark = colorScheme == .dark
+        let frameInterval: TimeInterval = (activeMode == .clear || activeMode == .frosty) ? (1.0 / 15.0) : (1.0 / 30.0)
         
-        TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { timeline in
+        TimelineView(.animation(minimumInterval: frameInterval, paused: !isAppActive)) { timeline in
             Canvas { context, size in
                 let t = timeline.date.timeIntervalSinceReferenceDate
                 switch activeMode {
@@ -81,6 +84,12 @@ public struct HomeWeatherAtmosphereView: View {
                     drawFrostCrystals(context: &context, size: size, time: t, isDark: isDark)
                 }
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            isAppActive = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didResignActiveNotification)) { _ in
+            isAppActive = false
         }
         .transaction { $0.animation = nil }
         .allowsHitTesting(false)

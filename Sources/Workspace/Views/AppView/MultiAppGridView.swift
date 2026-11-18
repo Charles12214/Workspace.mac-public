@@ -429,7 +429,7 @@ public struct TiledAppPaneView: View {
                                 .foregroundStyle(.secondary)
                             Text("You're offline")
                                 .font(.system(size: 18, weight: .bold, design: .rounded))
-                            Text("Open a document from Google Docs' offline view, or retry when connected.")
+                            Text("Open a document or presentation from Google Docs or Slides' offline view, or retry when connected.")
                                 .font(.system(size: 13))
                                 .foregroundStyle(.secondary)
                                 .multilineTextAlignment(.center)

@@ -140,7 +140,7 @@ public struct OnboardingView: View {
                 HStack(spacing: 6) {
                     Image(systemName: "sparkles")
                         .font(.system(size: 10.5, weight: .bold))
-                    Text("WHAT'S NEW IN V1.3.0")
+                    Text("WHAT'S NEW IN V1.3.1")
                         .font(.system(size: 10, weight: .heavy, design: .rounded))
                         .tracking(0.8)
                 }
@@ -168,7 +168,7 @@ public struct OnboardingView: View {
                 featureHighlightPill(
                     icon: "bolt.shield.fill",
                     title: "OfflineSuite.mac",
-                    subtitle: "Edit Google Docs offline & auto-sync in place",
+                    subtitle: "Edit Google Docs & Slides offline & auto-sync in place",
                     color: Color(hex: "34A853")
                 )
                 featureHighlightPill(
@@ -999,7 +999,7 @@ public struct OnboardingView: View {
                         .font(.system(size: 11, weight: .bold))
                         .foregroundStyle(Color(hex: "1A73E8"))
                     
-                    Text("V1.3.0 HIGHLIGHTS & ROADMAP")
+                    Text("V1.3.1 HIGHLIGHTS & ROADMAP")
                         .font(.system(size: 10.5, weight: .heavy, design: .rounded))
                         .foregroundStyle(.secondary)
                         .tracking(0.8)
@@ -1013,10 +1013,10 @@ public struct OnboardingView: View {
                 
                 HStack(alignment: .top, spacing: 14) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Ready in v1.3.0")
+                        Text("Ready in v1.3.1")
                             .font(.system(size: 11.5, weight: .bold))
                             .foregroundStyle(Color(hex: "34A853"))
-                        Text("• OfflineSuite.mac offline Docs & auto-sync\n• Animated weather atmosphere skies\n• Encrypted 5-city weather vault & collapsible Home")
+                        Text("• OfflineSuite.mac offline Docs & Slides auto-sync\n• Minute-aligned low-power idle & paused background skies\n• Encrypted 5-city weather vault & collapsible Home")
                             .font(.system(size: 10.5))
                             .foregroundStyle(.secondary)
                             .lineSpacing(2)
@@ -1029,7 +1029,7 @@ public struct OnboardingView: View {
                         Text("Up Next on Roadmap")
                             .font(.system(size: 11.5, weight: .bold))
                             .foregroundStyle(GeminiPalette.blue)
-                        Text("• v1.3.1 — Google Slides offline compatibility\n• v1.3.2 — Google Sheets offline compatibility\n• Offline Drive folder smart-sync & Gemini actions")
+                        Text("• v1.3.2 — Google Sheets offline compatibility & first-load fixes\n• Offline Drive folder smart-sync & Gemini actions")
                             .font(.system(size: 10.5))
                             .foregroundStyle(.secondary)
                             .lineSpacing(2)

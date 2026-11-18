@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 import SwiftUI
 import CoreLocation
 import Combine
@@ -183,6 +184,7 @@ public final class WeatherService: NSObject, ObservableObject, CLLocationManager
     }
     
     private var clockTimer: AnyCancellable?
+    private var clockWakeObservers: [NSObjectProtocol] = []
     private var weatherTimer: AnyCancellable?
     private var locationManager: CLLocationManager?
     private var lastKnownLocation: CLLocation?
@@ -261,12 +263,58 @@ public final class WeatherService: NSObject, ObservableObject, CLLocationManager
     
     private func setupClock() {
         updateClock()
-        // Update clock every second, but ONLY publish changes when minute or date actually changes
-        clockTimer = Timer.publish(every: 1.0, on: .main, in: .common)
-            .autoconnect()
-            .sink { [weak self] _ in
-                self?.updateClock()
+        if clockWakeObservers.isEmpty {
+            let wakeObs = NSWorkspace.shared.notificationCenter.addObserver(
+                forName: NSWorkspace.didWakeNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.scheduleNextMinuteTick()
+                }
             }
+            let clockObs = NotificationCenter.default.addObserver(
+                forName: .NSSystemClockDidChange,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.scheduleNextMinuteTick()
+                }
+            }
+            let dayObs = NotificationCenter.default.addObserver(
+                forName: .NSCalendarDayChanged,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.scheduleNextMinuteTick()
+                }
+            }
+            clockWakeObservers = [wakeObs, clockObs, dayObs]
+        }
+        scheduleNextMinuteTick()
+    }
+    
+    private func scheduleNextMinuteTick() {
+        clockTimer?.cancel()
+        clockTimer = nil
+        updateClock()
+        
+        let now = Date()
+        let cal = Calendar.current
+        let sec = cal.component(.second, from: now)
+        let nano = cal.component(.nanosecond, from: now)
+        let delay = max(0.5, 60.0 - Double(sec) - (Double(nano) / 1_000_000_000.0) + 0.05)
+        
+        let timer = Timer(timeInterval: delay, repeats: false) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.scheduleNextMinuteTick()
+            }
+        }
+        timer.tolerance = 0.5
+        RunLoop.main.add(timer, forMode: .common)
+        clockTimer = AnyCancellable { timer.invalidate() }
     }
     
     private func updateClock() {

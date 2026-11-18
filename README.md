@@ -24,8 +24,8 @@ With version **V1.3.0**, Workspace.mac is **100% open-source**. When a desktop a
 ## ✨ Features at a Glance
 
 - **18 Unified Workspace Apps**: Docs, Sheets, Slides, Drive, Gmail, Calendar, Meet, Chat, Keep, NotebookLM, Forms, Sites, Contacts, Tasks, Classroom, Cloud, Admin, and Gemini.
-- **OfflineSuite.mac (True Offline Google Docs & In-Place Sync)**:
-  - Native Swift WebKit extension bridge enabling real offline Google Docs editing inside your local IndexedDB store (Google Slides offline compatibility arrives in **V1.3.1**, and Google Sheets offline compatibility arrives in **V1.3.2**).
+- **OfflineSuite.mac (True Offline Google Docs & Slides + In-Place Sync)**:
+  - Native Swift WebKit extension bridge enabling real offline Google Docs and Google Slides editing inside your local IndexedDB store (active in **V1.3.1**; Google Sheets offline compatibility arrives in **V1.3.2**).
   - Seamlessly reconnects and syncs local offline edits straight back to Google Drive without interrupting or redirecting your open document.
 - **Dynamic Weather Atmosphere (Home Background)**:
   - Optional weather-reactive `Canvas` sky backdrop on the Home screen: warm top-right yellow glow on clear skies, drifting mist/clouds for fog, falling droplets for rain & thunderstorms, falling flurries for snow, and fading dendritic frost crystals in freezing conditions.

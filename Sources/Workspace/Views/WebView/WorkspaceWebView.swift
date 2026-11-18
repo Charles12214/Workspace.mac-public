@@ -50,7 +50,7 @@ public struct WorkspaceWebView: View {
                             .foregroundStyle(.secondary)
                         Text("You're offline")
                             .font(.system(size: 18, weight: .bold, design: .rounded))
-                        Text("Open a document from Google Docs' offline view, or retry when connected.")
+                        Text("Open a document or presentation from Google Docs or Slides' offline view, or retry when connected.")
                             .font(.system(size: 13))
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
@@ -571,21 +571,7 @@ public struct WebKitRepresentable: NSViewRepresentable {
         wv.uiDelegate = context.coordinator
         context.coordinator.setupObservers(for: wv)
         
-        if isNew || wv.url == nil {
-            if OfflineManager.shared.isOffline {
-                if url.absoluteString.contains("/d/") {
-                    var request = URLRequest(url: url)
-                    request.cachePolicy = .returnCacheDataElseLoad
-                    wv.load(request)
-                } else {
-                    self.isOfflineError = true
-                }
-            } else {
-                var request = URLRequest(url: url)
-                request.cachePolicy = .useProtocolCachePolicy
-                wv.load(request)
-            }
-        }
+        loadInitialOrOverrideURL(in: wv, coordinator: context.coordinator, isNew: isNew)
         
         hostView.attach(webView: wv)
         
@@ -625,19 +611,32 @@ public struct WebKitRepresentable: NSViewRepresentable {
                 self.canGoForward = wv.canGoForward
             }
             
-            if wv.url == nil {
-                if OfflineManager.shared.isOffline {
-                    if url.absoluteString.contains("/d/") {
-                        var request = URLRequest(url: url)
-                        request.cachePolicy = .returnCacheDataElseLoad
-                        wv.load(request)
-                    } else {
-                        self.isOfflineError = true
-                    }
-                } else {
-                    var request = URLRequest(url: url)
-                    request.cachePolicy = .useProtocolCachePolicy
-                    wv.load(request)
+            loadInitialOrOverrideURL(in: wv, coordinator: context.coordinator, isNew: false)
+        }
+    }
+    
+    @MainActor
+    private func loadInitialOrOverrideURL(in wv: WKWebView, coordinator: Coordinator, isNew: Bool) {
+        let pendingOverride = AppState.shared.overrideUrlForApp[app.id]
+        if pendingOverride == nil {
+            coordinator.lastDispatchedOverrideUrl = nil
+        }
+        let hasFreshOverride = pendingOverride != nil
+            && wv.url?.absoluteString != pendingOverride?.absoluteString
+            && coordinator.lastDispatchedOverrideUrl != pendingOverride
+        guard isNew || wv.url == nil || hasFreshOverride else { return }
+        
+        let targetUrl = pendingOverride ?? url
+        var request = URLRequest(url: targetUrl)
+        request.cachePolicy = OfflineManager.shared.isOffline ? .returnCacheDataElseLoad : .useProtocolCachePolicy
+        wv.load(request)
+        
+        if let pendingOverride {
+            coordinator.lastDispatchedOverrideUrl = pendingOverride
+            let targetAppId = app.id
+            DispatchQueue.main.async {
+                if AppState.shared.overrideUrlForApp[targetAppId] == pendingOverride {
+                    AppState.shared.overrideUrlForApp.removeValue(forKey: targetAppId)
                 }
             }
         }
@@ -651,6 +650,7 @@ public struct WebKitRepresentable: NSViewRepresentable {
         var parent: WebKitRepresentable
         private var observers: [NSKeyValueObservation] = []
         private var lastRejectionRecoveryAt: Date? = nil
+        var lastDispatchedOverrideUrl: URL? = nil
         
         init(_ parent: WebKitRepresentable) {
             self.parent = parent

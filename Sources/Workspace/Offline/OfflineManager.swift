@@ -290,6 +290,15 @@ public final class OfflineManager: ObservableObject {
             for var doc in list {
                 if doc.id.hasPrefix("doc_tracked_") { continue }
                 guard let validTitle = Self.sanitizeTrackedDocumentTitle(doc.title) else { continue }
+                if doc.url.contains("/presentation/d/") || doc.type == "slides" {
+                    doc.type = "slides"
+                    doc.url = "https://docs.google.com/presentation/d/\(doc.id)/edit"
+                    doc.exportUrl = "https://docs.google.com/presentation/d/\(doc.id)/export?format=pptx"
+                } else if doc.url.contains("/spreadsheets/d/") || doc.type == "sheets" {
+                    doc.type = "sheets"
+                    doc.url = "https://docs.google.com/spreadsheets/d/\(doc.id)/edit"
+                    doc.exportUrl = "https://docs.google.com/spreadsheets/d/\(doc.id)/export?format=xlsx"
+                }
                 let dedupeKey = "\(doc.type.lowercased())::\(validTitle.lowercased())"
                 if seenIds.contains(doc.id) || seenKeys.contains(dedupeKey) { continue }
                 
@@ -348,6 +357,7 @@ public final class OfflineManager: ObservableObject {
                     $0.id == docId || ($0.type.lowercased() == type.lowercased() && $0.title.lowercased() == normalizedTitleKey)
                 }) {
                     trackedDocuments[idx].title = title
+                    if trackedDocuments[idx].id == docId { trackedDocuments[idx].type = type }
                     if !url.isEmpty { trackedDocuments[idx].url = url }
                     if !exportUrl.isEmpty { trackedDocuments[idx].exportUrl = exportUrl }
                     changed = true
@@ -385,6 +395,7 @@ public final class OfflineManager: ObservableObject {
             $0.id == docId || ($0.type.lowercased() == type.lowercased() && $0.title.lowercased() == normalizedTitleKey)
         }) {
             trackedDocuments[idx].title = title
+            if trackedDocuments[idx].id == docId { trackedDocuments[idx].type = type }
             if !url.isEmpty { trackedDocuments[idx].url = url }
             if !exportUrl.isEmpty { trackedDocuments[idx].exportUrl = exportUrl }
             trackedDocuments[idx].lastOpened = now

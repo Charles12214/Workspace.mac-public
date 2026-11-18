@@ -621,7 +621,7 @@ public struct SettingsView: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text("Recent & Offline Documents")
                         .font(.system(size: 12.5, weight: .medium))
-                    Text("Show quick-resume cards for offline-enabled Google Docs (Slides in v1.3.1, Sheets in v1.3.2).")
+                    Text("Show quick-resume cards for offline-enabled Google Docs & Slides (Sheets in v1.3.2).")
                         .font(.system(size: 10.5))
                         .foregroundStyle(.secondary)
                 }
@@ -1411,7 +1411,7 @@ public struct SettingsView: View {
                 )
             }
             
-            Text("Google Docs offline compatibility is active in v1.3.0, with core Workspace apps pre-warmed in WebKit's persistent offline storage. Google Slides offline compatibility arrives in v1.3.1, and Google Sheets offline compatibility arrives in v1.3.2.")
+            Text("Google Docs & Google Slides offline compatibility is active in v1.3.1, with core Workspace apps pre-warmed in WebKit's persistent offline storage. Google Sheets offline compatibility arrives in v1.3.2.")
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
                 .lineSpacing(2)
@@ -1544,26 +1544,26 @@ public struct SettingsView: View {
             
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 8) {
-                    Text("v1.3.0 (Current)")
+                    Text("v1.3.0")
                         .font(.system(size: 11.5, weight: .bold))
-                        .foregroundStyle(Color(hex: "34A853"))
+                        .foregroundStyle(.secondary)
                     Text("— Google Docs offline compatibility & OfflineSuite.mac")
                         .font(.system(size: 11.5))
                         .foregroundStyle(.secondary)
                 }
                 HStack(spacing: 8) {
-                    Text("v1.3.1")
+                    Text("v1.3.1 (Current)")
                         .font(.system(size: 11.5, weight: .bold))
-                        .foregroundStyle(Color(hex: "1A73E8"))
-                    Text("— Google Slides offline compatibility")
+                        .foregroundStyle(Color(hex: "34A853"))
+                    Text("— Google Slides offline compatibility & idle power optimization")
                         .font(.system(size: 11.5))
                         .foregroundStyle(.secondary)
                 }
                 HStack(spacing: 8) {
                     Text("v1.3.2")
                         .font(.system(size: 11.5, weight: .bold))
-                        .foregroundStyle(Color(hex: "0F9D58"))
-                    Text("— Google Sheets offline compatibility")
+                        .foregroundStyle(Color(hex: "1A73E8"))
+                    Text("— Google Sheets offline compatibility & first-load reliability fixes")
                         .font(.system(size: 11.5))
                         .foregroundStyle(.secondary)
                 }

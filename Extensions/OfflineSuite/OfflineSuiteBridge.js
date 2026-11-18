@@ -185,6 +185,12 @@
     'docs-offline-edose': true,
     'docs-offline-ecpl': true,
     'docs-wownoi': true,
+    'punch-offline-enabled': true,
+    'docs-offline-enable-punch': true,
+    'ritz-offline-enabled': true,
+    'docs-offline-enable-ritz': true,
+    'ritz-wownoi': true,
+    'enable-offline': true,
     'offline': true,
     'offlineSync': true,
     'offlineEnabled': true,
@@ -275,7 +281,9 @@
     localStorage.setItem('docsOfflineIframeApi-f', '1');
     localStorage.setItem('docsOfflineIframeApi-n', '1');
     localStorage.setItem('kx-e-v', '1');
+    localStorage.setItem('punch-e-v', '1');
     localStorage.setItem('ritz-e-v', '1');
+    localStorage.setItem('trix-e-v', '1');
     localStorage.setItem('emdraw-e-v', '1');
   } catch(e) {}
 
@@ -1182,8 +1190,9 @@
               (target.classList && target.classList.contains('docs-texteventtarget-iframe')) ||
               target.tagName === 'TEXTAREA' ||
               target.tagName === 'INPUT' ||
+              target.isContentEditable === true ||
               (target.ownerDocument && target.ownerDocument.defaultView !== window) ||
-              (target.closest && target.closest('.docs-editor, .kix-appview-editor, .kix-page-paginated'));
+              (target.closest && target.closest('.docs-editor, .docs-editor-container, .kix-appview-editor, .kix-page-paginated, .punch-viewer-container, .punch-filmstrip, .sketchy-text-content-wrapper, .cell-input, #waffle-rich-text-editor, #t-formula-bar-input-container, .grid-container, .waffle-grid-container, svg'));
             if (isEditorTarget && !this.metaKey && !this.ctrlKey) {
               return; // Allow the keystroke
             }
@@ -1196,15 +1205,17 @@
 
   patchWindowPreventDefault(window);
 
-  setInterval(function() {
-    try {
-      document.querySelectorAll('iframe.docs-texteventtarget-iframe').forEach(function(iframe) {
-        try {
-          if (iframe.contentWindow) patchWindowPreventDefault(iframe.contentWindow);
-        } catch(e) {}
-      });
-    } catch(e) {}
-  }, 500);
+  if (window === window.top) {
+    setInterval(function() {
+      try {
+        document.querySelectorAll('iframe.docs-texteventtarget-iframe').forEach(function(iframe) {
+          try {
+            if (iframe.contentWindow) patchWindowPreventDefault(iframe.contentWindow);
+          } catch(e) {}
+        });
+      } catch(e) {}
+    }, 2000);
+  }
 
   // ═══════════════════════════════════════════════════════════════════════════
   // SECTION 6: Protobuf Response Builder
@@ -1307,27 +1318,41 @@
     kNw[0] = hOp;
     kNw[1] = hOp;
 
-    // Build valid jFc item list for Type 2 and Type 3
-    let tracked = getTrackedDocsList();
-    if (tracked.length === 0) {
-      const m = window.location.pathname.match(/\/(document|spreadsheets|presentation)\/d\/([a-zA-Z0-9_-]+)/);
-      if (m) {
-        tracked = [{
-          docId: m[2],
-          title: document.title.replace(/ - Google.*$/, '').trim() || 'Current Document',
-          type: m[1] === 'spreadsheets' ? 'ritz' : (m[1] === 'presentation' ? 'punch' : 'kix'),
-          modifiedTime: Date.now(),
-          viewedTime: Date.now()
-        }];
-      } else {
-        tracked = [{
-          docId: 'doc_offline_ready',
-          title: 'Document',
-          type: 'kix',
-          modifiedTime: Date.now(),
-          viewedTime: Date.now()
-        }];
+    // Build valid jFc item list for Type 2 and Type 3, always ensuring the active
+    // document or Slides presentation (punch) is present even if trackedDocs already has entries.
+    let tracked = getTrackedDocsList().slice();
+    let pagePath = window.location.pathname || '';
+    try {
+      if (window.top && window.top !== window && window.top.location && window.top.location.pathname) {
+        pagePath = window.top.location.pathname;
       }
+    } catch(e) {}
+    const activeMatch = pagePath.match(/\/(document|spreadsheets|presentation)\/d\/([a-zA-Z0-9_-]+)/);
+    if (activeMatch) {
+      const activeType = activeMatch[1] === 'spreadsheets' ? 'ritz' : (activeMatch[1] === 'presentation' ? 'punch' : 'kix');
+      const activeTitle = document.title.replace(/ - Google.*$/, '').trim() || 'Current Document';
+      const activeItem = {
+        docId: activeMatch[2],
+        title: activeTitle,
+        type: activeType,
+        modifiedTime: Date.now(),
+        viewedTime: Date.now()
+      };
+      const existingIdx = tracked.findIndex(function(d) { return d && d.docId === activeMatch[2]; });
+      if (existingIdx >= 0) {
+        tracked[existingIdx] = Object.assign({}, tracked[existingIdx], activeItem);
+      } else {
+        tracked.unshift(activeItem);
+      }
+    }
+    if (tracked.length === 0) {
+      tracked = [{
+        docId: 'doc_offline_ready',
+        title: 'Document',
+        type: 'kix',
+        modifiedTime: Date.now(),
+        viewedTime: Date.now()
+      }];
     }
     const protoItems = tracked.map(buildItemProtobuf);
     // jFc: repeated field 1 is the array of iFc items
@@ -1727,9 +1752,8 @@
   // Active Save Indicator Reconciler
   // When Google Docs sets the status caption to "Trying to connect...",
   // immediately update it to "Saved to this device".
-  try {
+  if (MOCK_NETWORK) try {
     function reconcileSaveIndicator() {
-      if (!MOCK_NETWORK) return; // never fake the status text; show Docs' real state
       const captions = document.querySelectorAll(
         '.docs-save-indicator-caption, .docs-titlebar-badge, .docs-save-indicator'
       );
@@ -1833,20 +1857,46 @@
         var mNw = [lNw, lNw];
         var hOp = [1, 1, 1];
         var kNw = [hOp, hOp];
-        var docItem = ['doc_offline_ready', 'Document', 'kix', Date.now(), Date.now(), null, true, true, 1, true, 0, 0, false, true, null];
+        var items = [];
         try {
           var saved = localStorage.getItem('__offlineSuite_trackedDocs');
           if (saved) {
             var parsed = JSON.parse(saved);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              var p = parsed[0];
-              docItem[0] = String(p.docId || docItem[0]);
-              docItem[1] = String(p.title || docItem[1]);
-              docItem[2] = (p.type === 'ritz' || p.type === 'punch') ? p.type : 'kix';
+            if (Array.isArray(parsed)) {
+              items = parsed;
             }
           }
         } catch(x) {}
-        var jFc = [[docItem]];
+        var refPath = '';
+        try {
+          if (window.parent && window.parent.location && window.parent.location.pathname) {
+            refPath = window.parent.location.pathname;
+          }
+        } catch(x) {}
+        if (!refPath && document.referrer) {
+          refPath = document.referrer;
+        }
+        var pm = String(refPath || '').match(/\\/(document|spreadsheets|presentation)\\/d\\/([a-zA-Z0-9_-]+)/);
+        if (pm) {
+          var activeType = pm[1] === 'spreadsheets' ? 'ritz' : (pm[1] === 'presentation' ? 'punch' : 'kix');
+          var foundIdx = items.findIndex(function(it) { return it && it.docId === pm[2]; });
+          var activeEntry = { docId: pm[2], title: 'Current Document', type: activeType, modifiedTime: Date.now(), viewedTime: Date.now() };
+          if (foundIdx >= 0) {
+            items[foundIdx].type = activeType;
+          } else {
+            items.unshift(activeEntry);
+          }
+        }
+        var protoItems = items.filter(Boolean).map(function(p) {
+          var pType = (p.type === 'ritz' || p.type === 'punch' || p.type === 'drawing') ? p.type : 'kix';
+          var mod = typeof p.modifiedTime === 'number' ? p.modifiedTime : Date.now();
+          var viewed = typeof p.viewedTime === 'number' ? p.viewedTime : Date.now();
+          return [String(p.docId || 'doc_offline_ready'), String(p.title || 'Document'), pType, mod, viewed, null, true, true, 1, true, 0, 0, false, true, null];
+        });
+        if (protoItems.length === 0) {
+          protoItems = [['doc_offline_ready', 'Document', 'kix', Date.now(), Date.now(), null, true, true, 1, true, 0, 0, false, true, null]];
+        }
+        var jFc = [protoItems];
         var qAp = [1, 1, 1];
         var nNw = [qAp, qAp];
         var iNw = [hOp, hOp];
@@ -2228,17 +2278,19 @@
       }
     }
 
-    if (typeof MutationObserver !== 'undefined') {
-      const settingsObserver = new MutationObserver(function() {
-        reconcileSettingsDialog();
-      });
-      settingsObserver.observe(document.documentElement || document, {
-        childList: true,
-        subtree: true,
-        characterData: true
-      });
+    if (window === window.top) {
+      if (typeof MutationObserver !== 'undefined') {
+        const settingsObserver = new MutationObserver(function() {
+          reconcileSettingsDialog();
+        });
+        settingsObserver.observe(document.documentElement || document, {
+          childList: true,
+          subtree: true,
+          characterData: true
+        });
+      }
+      setInterval(reconcileSettingsDialog, 1000);
     }
-    setInterval(reconcileSettingsDialog, 100);
   } catch(e) {}
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -2253,7 +2305,13 @@
       if (saveTimer) clearTimeout(saveTimer);
       saveTimer = setTimeout(function() {
         try {
-          const editor = document.querySelector('.kix-appview-editor') || document.querySelector('.docs-editor') || document.body;
+          const editor = document.querySelector('.kix-appview-editor') ||
+                         document.querySelector('.punch-viewer-content') ||
+                         document.querySelector('#waffle-rich-text-editor') ||
+                         document.querySelector('.grid-container') ||
+                         document.querySelector('.docs-editor-container') ||
+                         document.querySelector('.docs-editor') ||
+                         document.body;
           const titleInput = document.querySelector('.docs-title-input');
           let title = titleInput ? titleInput.value : document.title;
           title = title.replace(/ - Google (Docs|Sheets|Slides|Drive)$/i, '').trim();
@@ -2365,8 +2423,9 @@
     links.forEach(function(el) {
       let href = el.getAttribute('href') || (el.querySelector('a') && el.querySelector('a').getAttribute('href')) || '';
       let docId = el.getAttribute('data-id') || '';
-      let docType = 'docs';
-      let protoType = 'kix';
+      const pagePath = window.location.pathname || '';
+      let docType = pagePath.includes('/spreadsheets') ? 'sheets' : (pagePath.includes('/presentation') ? 'slides' : 'docs');
+      let protoType = docType === 'sheets' ? 'ritz' : (docType === 'slides' ? 'punch' : 'kix');
 
       if (href) {
         const m = href.match(/\/(document|spreadsheets|presentation)\/d\/([a-zA-Z0-9_-]+)/);
@@ -2390,9 +2449,10 @@
         const exportUrl = 'https://docs.google.com/' + baseUrl + '/d/' + docId + '/export?format=' + exportFormat;
 
         const existing = docsMap.get(docId) || {};
+        const resolvedTitle = (existing.title && existing.title !== 'Document') ? existing.title : title;
         docsMap.set(docId, {
           docId: docId,
-          title: existing.title || title,
+          title: resolvedTitle,
           type: protoType,
           appType: docType,
           url: 'https://docs.google.com/' + baseUrl + '/d/' + docId + '/edit',
@@ -2433,9 +2493,11 @@
   setTimeout(scanHomescreenDocuments, 8000);
   setInterval(scanHomescreenDocuments, 10000);
 
+  setTimeout(trackDocument, 300);
   setTimeout(trackDocument, 1500);
   setTimeout(trackDocument, 4000);
   setTimeout(trackDocument, 10000);
+  window.addEventListener('load', trackDocument);
 
   let trackTimer = null;
   function scheduleTrack() {
@@ -2444,6 +2506,7 @@
   }
   document.addEventListener('input', scheduleTrack, { passive: true });
   document.addEventListener('keyup', scheduleTrack, { passive: true });
+  document.addEventListener('mouseup', scheduleTrack, { passive: true });
 
   // ═══════════════════════════════════════════════════════════════════════════
   // SECTION 16: Ready Signal
