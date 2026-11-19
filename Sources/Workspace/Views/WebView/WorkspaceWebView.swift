@@ -1,6 +1,7 @@
 import SwiftUI
 import WebKit
 import AppKit
+import QuartzCore
 
 public struct WorkspaceWebView: View {
     public let app: WorkspaceAppItem
@@ -274,7 +275,10 @@ public struct WorkspaceWebView: View {
 @MainActor
 public final class WebKitHostView: NSView {
     public private(set) weak var currentWebView: WKWebView?
+    public var poolKey: String? = nil
+    public private(set) var isDismantled: Bool = false
     private var isTiledPane: Bool = false
+    private var hasConfiguredLayer: Bool = false
     
     public override init(frame: NSRect) {
         super.init(frame: frame)
@@ -287,13 +291,21 @@ public final class WebKitHostView: NSView {
     }
     
     public func setTiled(_ tiled: Bool) {
+        if hasConfiguredLayer && self.isTiledPane == tiled {
+            return
+        }
+        hasConfiguredLayer = true
         self.isTiledPane = tiled
         self.wantsLayer = true
         self.layer?.cornerRadius = tiled ? 12 : 0
-        self.layer?.masksToBounds = true
+        self.layer?.maskedCorners = tiled
+            ? [.layerMinXMinYCorner, .layerMaxXMinYCorner]
+            : [.layerMinXMinYCorner, .layerMaxXMinYCorner, .layerMinXMaxYCorner, .layerMaxXMaxYCorner]
+        self.layer?.masksToBounds = tiled
     }
     
     public func attach(webView: WKWebView) {
+        guard !isDismantled else { return }
         if currentWebView === webView && webView.superview === self {
             if self.bounds.width > 0 && self.bounds.height > 0 && webView.frame != self.bounds {
                 webView.frame = self.bounds
@@ -303,7 +315,7 @@ public final class WebKitHostView: NSView {
         }
         
         // Remove any old subviews from this host
-        for subview in self.subviews {
+        for subview in self.subviews where subview !== webView {
             subview.removeFromSuperview()
         }
         
@@ -313,53 +325,73 @@ public final class WebKitHostView: NSView {
         }
         
         self.currentWebView = webView
-        let targetFrame = (self.bounds.width > 0 && self.bounds.height > 0) ? self.bounds : NSRect(x: 0, y: 0, width: 800, height: 600)
-        webView.frame = targetFrame
+        let targetFrame: NSRect
+        if self.bounds.width > 0 && self.bounds.height > 0 {
+            targetFrame = self.bounds
+        } else if webView.frame.width > 0 && webView.frame.height > 0 {
+            targetFrame = webView.frame
+        } else {
+            targetFrame = NSRect(x: 0, y: 0, width: 800, height: 600)
+        }
+        if webView.frame != targetFrame {
+            webView.frame = targetFrame
+        }
         webView.autoresizingMask = [.width, .height]
         webView.isHidden = false
-        self.addSubview(webView)
-        self.needsLayout = true
-        webView.needsLayout = true
-        webView.needsDisplay = true
+        if webView.superview !== self {
+            self.addSubview(webView)
+        }
+    }
+    
+    public func detachIfOwned() {
+        isDismantled = true
+        if let wv = currentWebView, wv.superview === self {
+            wv.removeFromSuperview()
+        }
+        currentWebView = nil
     }
     
     public override func setFrameSize(_ newSize: NSSize) {
         super.setFrameSize(newSize)
-        if let wv = currentWebView, newSize.width > 0 && newSize.height > 0 {
-            wv.frame = NSRect(origin: .zero, size: newSize)
+        let target = NSRect(origin: .zero, size: newSize)
+        if let wv = currentWebView, wv.superview === self, newSize.width > 0 && newSize.height > 0, wv.frame != target {
+            wv.frame = target
         }
     }
     
     public override func resizeSubviews(withOldSize oldSize: NSSize) {
         super.resizeSubviews(withOldSize: oldSize)
-        if let wv = currentWebView, self.bounds.width > 0 && self.bounds.height > 0 {
+        if let wv = currentWebView, wv.superview === self, self.bounds.width > 0 && self.bounds.height > 0, wv.frame != self.bounds {
             wv.frame = self.bounds
         }
     }
     
     public override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
-        if let wv = currentWebView, window != nil {
-            if wv.superview !== self {
-                self.addSubview(wv)
+        guard !isDismantled, window != nil, let wv = currentWebView else { return }
+        let canReattach = wv.superview === self
+            || wv.superview == nil
+            || wv.superview?.window == nil
+            || (poolKey.map { WebKitPool.shared.isOwner(self, forKey: $0) } ?? false)
+        guard canReattach else { return }
+        if wv.superview !== self {
+            if wv.superview != nil {
+                wv.removeFromSuperview()
             }
-            if self.bounds.width > 0 && self.bounds.height > 0 {
-                wv.frame = self.bounds
-            }
-            wv.isHidden = false
-            wv.needsLayout = true
-            wv.needsDisplay = true
+            self.addSubview(wv)
         }
+        if self.bounds.width > 0 && self.bounds.height > 0 && wv.frame != self.bounds {
+            wv.frame = self.bounds
+        }
+        wv.isHidden = false
     }
     
     public override func layout() {
         super.layout()
-        if let wv = currentWebView {
-            if wv.frame != self.bounds && self.bounds.width > 0 && self.bounds.height > 0 {
-                wv.frame = self.bounds
-            }
-            wv.needsLayout = true
-            wv.needsDisplay = true
+        if let wv = currentWebView, wv.superview === self,
+           self.bounds.width > 0 && self.bounds.height > 0,
+           wv.frame != self.bounds {
+            wv.frame = self.bounds
         }
     }
 }
@@ -426,9 +458,14 @@ public struct WebKitRepresentable: NSViewRepresentable {
         let hostView = WebKitHostView(frame: NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1400, height: 900))
         hostView.setTiled(isTiled)
         
+        let accountId = AppState.shared.activeAccountId
+        let poolKey = WebKitPool.shared.key(appId: app.id, accountId: accountId)
+        hostView.poolKey = poolKey
+        WebKitPool.shared.claimOwnership(hostView, appId: app.id, accountId: accountId)
+        
         let (wv, isNew) = WebKitPool.shared.getOrCreateWebView(
             appId: app.id,
-            accountId: AppState.shared.activeAccountId
+            accountId: accountId
         ) {
             let configuration = WKWebViewConfiguration()
             configuration.websiteDataStore = AppState.shared.activeDataStore
@@ -588,6 +625,8 @@ public struct WebKitRepresentable: NSViewRepresentable {
             }
             if AppState.shared.focusedTiledAppId == self.app.id || AppState.shared.selectedAppId == self.app.id {
                 AppState.shared.activeWebView = wv
+            } else if AppState.shared.activeWebView === wv {
+                AppState.shared.syncActiveNavigationState(from: wv)
             }
         }
         
@@ -595,24 +634,47 @@ public struct WebKitRepresentable: NSViewRepresentable {
     }
     
     public func updateNSView(_ hostView: WebKitHostView, context: Context) {
+        guard !hostView.isDismantled else { return }
+        context.coordinator.parent = self
         hostView.setTiled(isTiled)
-        if let wv = WebKitPool.shared.getWebView(appId: app.id, accountId: AppState.shared.activeAccountId) {
-            hostView.attach(webView: wv)
-            if hostView.bounds.width > 0 && hostView.bounds.height > 0 {
-                wv.frame = hostView.bounds
-            }
-            wv.navigationDelegate = context.coordinator
-            wv.uiDelegate = context.coordinator
-            context.coordinator.setupObservers(for: wv)
-            
-            DispatchQueue.main.async {
-                self.isLoading = wv.isLoading
-                self.canGoBack = wv.canGoBack
-                self.canGoForward = wv.canGoForward
-            }
-            
-            loadInitialOrOverrideURL(in: wv, coordinator: context.coordinator, isNew: false)
+        
+        let accountId = AppState.shared.activeAccountId
+        guard let wv = WebKitPool.shared.getWebView(appId: app.id, accountId: accountId) else { return }
+        
+        let isOwner = WebKitPool.shared.isOwner(hostView, appId: app.id, accountId: accountId)
+        let webViewIsOrphaned = (wv.superview == nil || wv.superview?.window == nil)
+        guard isOwner || (hostView.window != nil && webViewIsOrphaned) else { return }
+        if !isOwner {
+            let poolKey = WebKitPool.shared.key(appId: app.id, accountId: accountId)
+            hostView.poolKey = poolKey
+            WebKitPool.shared.claimOwnership(hostView, appId: app.id, accountId: accountId)
         }
+        
+        hostView.attach(webView: wv)
+        if hostView.bounds.width > 0 && hostView.bounds.height > 0 && wv.frame != hostView.bounds {
+            wv.frame = hostView.bounds
+        }
+        if wv.navigationDelegate !== context.coordinator {
+            wv.navigationDelegate = context.coordinator
+        }
+        if wv.uiDelegate !== context.coordinator {
+            wv.uiDelegate = context.coordinator
+        }
+        context.coordinator.setupObservers(for: wv)
+        
+        if self.webViewOut !== wv || self.isLoading != wv.isLoading || self.canGoBack != wv.canGoBack || self.canGoForward != wv.canGoForward {
+            DispatchQueue.main.async {
+                if self.webViewOut !== wv { self.webViewOut = wv }
+                if self.isLoading != wv.isLoading { self.isLoading = wv.isLoading }
+                if self.canGoBack != wv.canGoBack { self.canGoBack = wv.canGoBack }
+                if self.canGoForward != wv.canGoForward { self.canGoForward = wv.canGoForward }
+                if AppState.shared.activeWebView === wv {
+                    AppState.shared.syncActiveNavigationState(from: wv)
+                }
+            }
+        }
+        
+        loadInitialOrOverrideURL(in: wv, coordinator: context.coordinator, isNew: false)
     }
     
     @MainActor
@@ -624,7 +686,9 @@ public struct WebKitRepresentable: NSViewRepresentable {
         let hasFreshOverride = pendingOverride != nil
             && wv.url?.absoluteString != pendingOverride?.absoluteString
             && coordinator.lastDispatchedOverrideUrl != pendingOverride
-        guard isNew || wv.url == nil || hasFreshOverride else { return }
+        let needsInitialLoad = isNew || (wv.url == nil && !wv.isLoading && coordinator.initialLoadWebView !== wv)
+        guard needsInitialLoad || hasFreshOverride else { return }
+        coordinator.initialLoadWebView = wv
         
         let targetUrl = pendingOverride ?? url
         var request = URLRequest(url: targetUrl)
@@ -643,14 +707,20 @@ public struct WebKitRepresentable: NSViewRepresentable {
     }
     
     public static func dismantleNSView(_ hostView: WebKitHostView, coordinator: Coordinator) {
+        hostView.detachIfOwned()
+        if let poolKey = hostView.poolKey {
+            WebKitPool.shared.releaseOwnership(hostView, forKey: poolKey)
+        }
         coordinator.cleanup()
     }
     
     public class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate, WKScriptMessageHandler {
         var parent: WebKitRepresentable
         private var observers: [NSKeyValueObservation] = []
+        private weak var observedWebView: WKWebView? = nil
         private var lastRejectionRecoveryAt: Date? = nil
         var lastDispatchedOverrideUrl: URL? = nil
+        weak var initialLoadWebView: WKWebView? = nil
         
         init(_ parent: WebKitRepresentable) {
             self.parent = parent
@@ -661,26 +731,50 @@ public struct WebKitRepresentable: NSViewRepresentable {
                 obs.invalidate()
             }
             observers.removeAll()
+            observedWebView = nil
         }
         
         func setupObservers(for webView: WKWebView) {
+            guard observedWebView !== webView || observers.isEmpty else { return }
             cleanup()
+            observedWebView = webView
             
             observers.append(webView.observe(\.canGoBack, options: [.new]) { [weak self] wv, _ in
                 DispatchQueue.main.async {
-                    self?.parent.canGoBack = wv.canGoBack
+                    guard let self = self else { return }
+                    let val = wv.canGoBack
+                    if self.parent.canGoBack != val {
+                        self.parent.canGoBack = val
+                    }
+                    if AppState.shared.activeWebView === wv {
+                        AppState.shared.syncActiveNavigationState(from: wv)
+                    }
                 }
             })
             
             observers.append(webView.observe(\.canGoForward, options: [.new]) { [weak self] wv, _ in
                 DispatchQueue.main.async {
-                    self?.parent.canGoForward = wv.canGoForward
+                    guard let self = self else { return }
+                    let val = wv.canGoForward
+                    if self.parent.canGoForward != val {
+                        self.parent.canGoForward = val
+                    }
+                    if AppState.shared.activeWebView === wv {
+                        AppState.shared.syncActiveNavigationState(from: wv)
+                    }
                 }
             })
             
             observers.append(webView.observe(\.isLoading, options: [.new]) { [weak self] wv, _ in
                 DispatchQueue.main.async {
-                    self?.parent.isLoading = wv.isLoading
+                    guard let self = self else { return }
+                    let val = wv.isLoading
+                    if self.parent.isLoading != val {
+                        self.parent.isLoading = val
+                    }
+                    if AppState.shared.activeWebView === wv {
+                        AppState.shared.syncActiveNavigationState(from: wv)
+                    }
                 }
             })
             
@@ -688,7 +782,9 @@ public struct WebKitRepresentable: NSViewRepresentable {
                 DispatchQueue.main.async {
                     guard let self = self else { return }
                     let title = wv.title ?? ""
-                    self.parent.pageTitle = title
+                    if self.parent.pageTitle != title {
+                        self.parent.pageTitle = title
+                    }
                     if let urlStr = wv.url?.absoluteString, !urlStr.isEmpty {
                         AppState.shared.recordRecentDocument(
                             appId: self.parent.app.id,
@@ -704,7 +800,9 @@ public struct WebKitRepresentable: NSViewRepresentable {
                 DispatchQueue.main.async {
                     guard let self = self else { return }
                     let urlStr = wv.url?.absoluteString ?? ""
-                    self.parent.currentUrlString = urlStr
+                    if self.parent.currentUrlString != urlStr {
+                        self.parent.currentUrlString = urlStr
+                    }
                     AppState.shared.notifyUrlChanged(sourceAppId: self.parent.app.id, newUrlString: urlStr)
                     if let title = wv.title, !title.isEmpty, !urlStr.isEmpty {
                         let detected = AppState.shared.app(for: urlStr)
@@ -723,12 +821,21 @@ public struct WebKitRepresentable: NSViewRepresentable {
         public func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             if let url = webView.url {
                 let urlStr = url.absoluteString
-                parent.currentUrlString = urlStr
+                if parent.currentUrlString != urlStr {
+                    parent.currentUrlString = urlStr
+                }
                 AppState.shared.notifyUrlChanged(sourceAppId: parent.app.id, newUrlString: urlStr)
                 OfflineHTMLCacheService.shared.saveFromWebView(webView, url: url)
             }
-            parent.isLoading = false
-            parent.isOfflineError = false
+            if parent.isLoading {
+                parent.isLoading = false
+            }
+            if parent.isOfflineError {
+                parent.isOfflineError = false
+            }
+            if AppState.shared.activeWebView === webView {
+                AppState.shared.syncActiveNavigationState(from: webView)
+            }
         }
         
         @MainActor

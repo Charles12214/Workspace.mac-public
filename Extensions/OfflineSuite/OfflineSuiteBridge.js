@@ -1171,10 +1171,11 @@
   } catch(e) { dbgWarn('Failed to install image interceptor:', e); }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // SECTION 5: Keyboard Unlock
-  // Google Docs blocks keydown/keypress/beforeinput via preventDefault when
-  // it believes the document isn't synced offline. We override preventDefault
-  // across all windows and text event target iframes to let editor keystrokes through.
+  // SECTION 5: Keyboard Unlock (Experimental MOCK_NETWORK Only)
+  // Swallowing preventDefault on normal online/IndexedDB offline sessions causes
+  // modern web editors (which insert programmatically + call preventDefault) to
+  // double-type characters (e.g. L -> LL), so keep native preventDefault intact
+  // unless MOCK_NETWORK is explicitly enabled.
   // ═══════════════════════════════════════════════════════════════════════════
 
   function patchWindowPreventDefault(win) {
@@ -1190,7 +1191,6 @@
               (target.classList && target.classList.contains('docs-texteventtarget-iframe')) ||
               target.tagName === 'TEXTAREA' ||
               target.tagName === 'INPUT' ||
-              target.isContentEditable === true ||
               (target.ownerDocument && target.ownerDocument.defaultView !== window) ||
               (target.closest && target.closest('.docs-editor, .docs-editor-container, .kix-appview-editor, .kix-page-paginated, .punch-viewer-container, .punch-filmstrip, .sketchy-text-content-wrapper, .cell-input, #waffle-rich-text-editor, #t-formula-bar-input-container, .grid-container, .waffle-grid-container, svg'));
             if (isEditorTarget && !this.metaKey && !this.ctrlKey) {
@@ -1203,18 +1203,20 @@
     } catch(e) {}
   }
 
-  patchWindowPreventDefault(window);
+  if (MOCK_NETWORK) {
+    patchWindowPreventDefault(window);
 
-  if (window === window.top) {
-    setInterval(function() {
-      try {
-        document.querySelectorAll('iframe.docs-texteventtarget-iframe').forEach(function(iframe) {
-          try {
-            if (iframe.contentWindow) patchWindowPreventDefault(iframe.contentWindow);
-          } catch(e) {}
-        });
-      } catch(e) {}
-    }, 2000);
+    if (window === window.top) {
+      setInterval(function() {
+        try {
+          document.querySelectorAll('iframe.docs-texteventtarget-iframe').forEach(function(iframe) {
+            try {
+              if (iframe.contentWindow) patchWindowPreventDefault(iframe.contentWindow);
+            } catch(e) {}
+          });
+        } catch(e) {}
+      }, 2000);
+    }
   }
 
   // ═══════════════════════════════════════════════════════════════════════════

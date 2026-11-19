@@ -12,6 +12,10 @@ public struct OfflineSuiteInjector {
     
     /// Returns the bundled JavaScript source for OfflineSuiteBridge.js
     public static var bridgeScriptSource: String {
+        cachedBridgeScriptSource
+    }
+    
+    private static let cachedBridgeScriptSource: String = {
         // Priority 1: Bundle Resources subdirectory
         if let bundleUrl = Bundle.main.url(
             forResource: "OfflineSuiteBridge",
@@ -37,7 +41,7 @@ public struct OfflineSuiteInjector {
         
         // Priority 4: Minimal inline fallback — sets extension flags only
         return minimalFallbackScript
-    }
+    }()
     
     /// Constructs a WKUserScript ready to be added to WKUserContentController.
     /// Injected at document start, for ALL frames (not just main frame),

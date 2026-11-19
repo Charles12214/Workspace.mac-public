@@ -77,82 +77,64 @@ public struct MultiAppGridView: View {
         )
     }
     
-    // MARK: - Responsive Grid Layout
+    // MARK: - Responsive Grid Layout (Single stable ForEach prevents pane destruction/reloading across count changes)
     @ViewBuilder
     private func gridLayout(for apps: [WorkspaceAppItem], in size: CGSize) -> some View {
-        switch apps.count {
+        let visibleApps = Array(apps.prefix(4))
+        ZStack(alignment: .topLeading) {
+            ForEach(visibleApps, id: \.id) { item in
+                let index = visibleApps.firstIndex(where: { $0.id == item.id }) ?? 0
+                let rect = paneRect(forIndex: index, totalCount: visibleApps.count, in: size)
+                TiledAppPaneView(
+                    app: item,
+                    state: state,
+                    isSingleApp: visibleApps.count == 1,
+                    paneIndex: index
+                )
+                .frame(width: rect.width, height: rect.height)
+                .offset(x: rect.minX, y: rect.minY)
+                .zIndex(state.focusedTiledAppId == item.id ? 1 : 0)
+            }
+        }
+        .frame(width: max(size.width, 1), height: max(size.height, 1), alignment: .topLeading)
+    }
+    
+    private func paneRect(forIndex index: Int, totalCount: Int, in size: CGSize) -> CGRect {
+        let pad: CGFloat = 8
+        let gap: CGFloat = 8
+        
+        switch totalCount {
         case 1:
-            // 1 App: Full Window
-            TiledAppPaneView(
-                app: apps[0],
-                state: state,
-                isSingleApp: true,
-                paneIndex: 0
-            )
-            .id(apps[0].id)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            
+            return CGRect(x: 0, y: 0, width: max(size.width, 1), height: max(size.height, 1))
         case 2:
-            // 2 Apps: 50 / 50 Side-by-Side Split (Smooth Animated Reordering)
-            HStack(spacing: 8) {
-                ForEach(Array(apps.enumerated()), id: \.element.id) { index, item in
-                    TiledAppPaneView(app: item, state: state, isSingleApp: false, paneIndex: index)
-                        .id(item.id)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .padding(8)
-            
+            let w = max((size.width - pad * 2 - gap) / 2, 1)
+            let h = max(size.height - pad * 2, 1)
+            let x = pad + CGFloat(index) * (w + gap)
+            return CGRect(x: x, y: pad, width: w, height: h)
         case 3:
-            // 3 Apps: Master on Left (50%), 2 Stacked on Right (50% each)
-            HStack(spacing: 8) {
-                TiledAppPaneView(app: apps[0], state: state, isSingleApp: false, paneIndex: 0)
-                    .id(apps[0].id)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                
-                VStack(spacing: 8) {
-                    TiledAppPaneView(app: apps[1], state: state, isSingleApp: false, paneIndex: 1)
-                        .id(apps[1].id)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    
-                    TiledAppPaneView(app: apps[2], state: state, isSingleApp: false, paneIndex: 2)
-                        .id(apps[2].id)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            let w = max((size.width - pad * 2 - gap) / 2, 1)
+            let hFull = max(size.height - pad * 2, 1)
+            let hHalf = max((size.height - pad * 2 - gap) / 2, 1)
+            if index == 0 {
+                return CGRect(x: pad, y: pad, width: w, height: hFull)
+            } else if index == 1 {
+                return CGRect(x: pad + w + gap, y: pad, width: w, height: hHalf)
+            } else {
+                return CGRect(x: pad + w + gap, y: pad + hHalf + gap, width: w, height: hHalf)
             }
-            .padding(8)
-            
         case 4:
-            // 4 Apps: 2x2 Quad Grid
-            VStack(spacing: 8) {
-                HStack(spacing: 8) {
-                    TiledAppPaneView(app: apps[0], state: state, isSingleApp: false, paneIndex: 0)
-                        .id(apps[0].id)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    
-                    TiledAppPaneView(app: apps[1], state: state, isSingleApp: false, paneIndex: 1)
-                        .id(apps[1].id)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                
-                HStack(spacing: 8) {
-                    TiledAppPaneView(app: apps[2], state: state, isSingleApp: false, paneIndex: 2)
-                        .id(apps[2].id)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    
-                    TiledAppPaneView(app: apps[3], state: state, isSingleApp: false, paneIndex: 3)
-                        .id(apps[3].id)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-            .padding(8)
-            
+            let w = max((size.width - pad * 2 - gap) / 2, 1)
+            let h = max((size.height - pad * 2 - gap) / 2, 1)
+            let col = index % 2
+            let row = index / 2
+            return CGRect(
+                x: pad + CGFloat(col) * (w + gap),
+                y: pad + CGFloat(row) * (h + gap),
+                width: w,
+                height: h
+            )
         default:
-            EmptyView()
+            return CGRect(x: 0, y: 0, width: max(size.width, 1), height: max(size.height, 1))
         }
     }
     
@@ -331,7 +313,6 @@ public struct TiledAppPaneView: View {
     @State private var isLoading: Bool = true
     @State private var currentUrlString: String = ""
     @State private var pageTitle: String = ""
-    @State private var isHovered: Bool = false
     @State private var isOfflineError: Bool = false
     
     private var isFocused: Bool {
@@ -468,7 +449,16 @@ public struct TiledAppPaneView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(
+            RoundedRectangle(cornerRadius: isSingleApp ? 0 : 12, style: .continuous)
+                .fill(Color(nsColor: .windowBackgroundColor))
+                .shadow(
+                    color: isSingleApp ? Color.clear : Color.black.opacity(0.12),
+                    radius: isSingleApp ? 0 : 8,
+                    x: 0,
+                    y: 3
+                )
+        )
         .overlay(
             // Focus ring & subtle window border when in multi-app mode
             RoundedRectangle(cornerRadius: isSingleApp ? 0 : 12, style: .continuous)
@@ -479,20 +469,17 @@ public struct TiledAppPaneView: View {
                     lineWidth: isFocused && !isSingleApp ? 2 : 1
                 )
         )
-        .shadow(
-            color: isSingleApp ? Color.clear : Color.black.opacity(0.12),
-            radius: isSingleApp ? 0 : 8,
-            x: 0,
-            y: 3
-        )
         .onTapGesture {
-            state.focusedTiledAppId = app.id
-            state.activeWebView = webView
+            if state.focusedTiledAppId != app.id {
+                state.focusedTiledAppId = app.id
+            }
+            if state.activeWebView !== webView {
+                state.activeWebView = webView
+            }
         }
         .onHover { h in
-            isHovered = h
-            if h && webView != nil {
-                state.activeWebView = webView
+            if h, let wv = webView, state.activeWebView !== wv {
+                state.activeWebView = wv
             }
         }
     }
@@ -633,9 +620,18 @@ public struct TiledAppPaneView: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 4)
         .background(
-            isFocused
-                ? Color(hex: "1A73E8").opacity(0.08)
-                : Color.primary.opacity(0.03)
+            UnevenRoundedRectangle(
+                topLeadingRadius: 12,
+                bottomLeadingRadius: 0,
+                bottomTrailingRadius: 0,
+                topTrailingRadius: 12,
+                style: .continuous
+            )
+            .fill(
+                isFocused
+                    ? Color(hex: "1A73E8").opacity(0.08)
+                    : Color.primary.opacity(0.03)
+            )
         )
         .overlay(
             Divider().opacity(0.2),

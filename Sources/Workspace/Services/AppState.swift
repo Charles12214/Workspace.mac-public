@@ -149,14 +149,26 @@ public final class AppState: ObservableObject {
     // Active Web View & Zoom Controls
     public weak var activeWebView: WKWebView? = nil {
         didSet {
-            if let wv = activeWebView {
-                currentZoom = Double(wv.pageZoom)
-            } else {
-                currentZoom = 1.0
+            let nextZoom = activeWebView.map { Double($0.pageZoom) } ?? 1.0
+            if currentZoom != nextZoom {
+                currentZoom = nextZoom
             }
+            syncActiveNavigationState(from: activeWebView)
         }
     }
     @Published public var currentZoom: Double = 1.0
+    @Published public var activeCanGoBack: Bool = false
+    @Published public var activeCanGoForward: Bool = false
+    @Published public var activeIsLoading: Bool = false
+    
+    public func syncActiveNavigationState(from webView: WKWebView?) {
+        let nextBack = webView?.canGoBack ?? false
+        let nextForward = webView?.canGoForward ?? false
+        let nextLoading = webView?.isLoading ?? false
+        if activeCanGoBack != nextBack { activeCanGoBack = nextBack }
+        if activeCanGoForward != nextForward { activeCanGoForward = nextForward }
+        if activeIsLoading != nextLoading { activeIsLoading = nextLoading }
+    }
     
     public func zoomIn() {
         guard let wv = activeWebView else { return }

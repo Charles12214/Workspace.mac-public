@@ -70,13 +70,6 @@ public struct WorkspaceAppContainer: View {
     @Binding public var showingSettings: Bool
     @ObservedObject private var offlineManager = OfflineManager.shared
     
-    @State private var webView: WKWebView? = nil
-    @State private var canGoBack: Bool = false
-    @State private var canGoForward: Bool = false
-    @State private var isLoading: Bool = true
-    @State private var currentUrlString: String = ""
-    @State private var pageTitle: String = ""
-    
     // Minimalist mode top-middle hover state
     @State private var isHoveringTopMiddle: Bool = false
     
@@ -84,9 +77,9 @@ public struct WorkspaceAppContainer: View {
     @State private var isHoveringLeftEdge: Bool = false
     @State private var isDraggingBookmark: Bool = false
     
-    // Dynamic Active App: switches automatically when user navigates (e.g. Drive -> Docs)
+    // Dynamic Active App
     private var displayApp: WorkspaceAppItem {
-        state.selectedApp ?? state.app(for: currentUrlString) ?? app
+        state.selectedApp ?? app
     }
     
     public init(app: WorkspaceAppItem, state: AppState, showingSettings: Binding<Bool>) {
@@ -295,36 +288,36 @@ public struct WorkspaceAppContainer: View {
             
             // Navigation Controls (Back / Forward / Reload)
             HStack(spacing: 4) {
-                Button(action: { webView?.goBack() }) {
+                Button(action: { state.activeWebView?.goBack() }) {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(canGoBack ? Color.primary : Color.secondary.opacity(0.3))
+                        .foregroundStyle(state.activeCanGoBack ? Color.primary : Color.secondary.opacity(0.3))
                         .padding(6)
                 }
                 .buttonStyle(.plain)
-                .disabled(!canGoBack)
+                .disabled(!state.activeCanGoBack)
                 .help("Back")
                 
-                Button(action: { webView?.goForward() }) {
+                Button(action: { state.activeWebView?.goForward() }) {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(canGoForward ? Color.primary : Color.secondary.opacity(0.3))
+                        .foregroundStyle(state.activeCanGoForward ? Color.primary : Color.secondary.opacity(0.3))
                         .padding(6)
                 }
                 .buttonStyle(.plain)
-                .disabled(!canGoForward)
+                .disabled(!state.activeCanGoForward)
                 .help("Forward")
                 
                 Button(action: {
-                    if isLoading { webView?.stopLoading() } else { webView?.reload() }
+                    if state.activeIsLoading { state.activeWebView?.stopLoading() } else { state.activeWebView?.reload() }
                 }) {
-                    Image(systemName: isLoading ? "xmark" : "arrow.clockwise")
+                    Image(systemName: state.activeIsLoading ? "xmark" : "arrow.clockwise")
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(Color.primary)
                         .padding(6)
                 }
                 .buttonStyle(.plain)
-                .help("Reload")
+                .help(state.activeIsLoading ? "Stop Loading" : "Reload")
             }
             .background(RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(0.04)))
             
@@ -602,19 +595,19 @@ public struct WorkspaceAppContainer: View {
             
             // Back & Reload
             HStack(spacing: 2) {
-                Button(action: { webView?.goBack() }) {
+                Button(action: { state.activeWebView?.goBack() }) {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(canGoBack ? Color.primary : Color.secondary.opacity(0.3))
+                        .foregroundStyle(state.activeCanGoBack ? Color.primary : Color.secondary.opacity(0.3))
                         .padding(5)
                 }
                 .buttonStyle(.plain)
-                .disabled(!canGoBack)
+                .disabled(!state.activeCanGoBack)
                 
                 Button(action: {
-                    if isLoading { webView?.stopLoading() } else { webView?.reload() }
+                    if state.activeIsLoading { state.activeWebView?.stopLoading() } else { state.activeWebView?.reload() }
                 }) {
-                    Image(systemName: isLoading ? "xmark" : "arrow.clockwise")
+                    Image(systemName: state.activeIsLoading ? "xmark" : "arrow.clockwise")
                         .font(.system(size: 10, weight: .semibold))
                         .padding(5)
                 }

@@ -1,5 +1,6 @@
 import Foundation
 import WebKit
+import AppKit
 
 /// Central in-memory pool for active WKWebView instances.
 /// Allows tabs, split-screen multitasking, and groups to resize and reposition
@@ -8,12 +9,39 @@ import WebKit
 public final class WebKitPool {
     public static let shared = WebKitPool()
     
+    @MainActor
+    private final class WeakViewBox {
+        weak var view: NSView?
+        init(_ view: NSView) { self.view = view }
+    }
+    
     private var webViews: [String: WKWebView] = [:]
+    private var activeOwners: [String: WeakViewBox] = [:]
     
     private init() {}
     
     public func key(appId: String, accountId: String) -> String {
         "\(appId)_\(accountId)"
+    }
+    
+    public func claimOwnership(_ host: NSView, appId: String, accountId: String) {
+        let k = key(appId: appId, accountId: accountId)
+        activeOwners[k] = WeakViewBox(host)
+    }
+    
+    public func releaseOwnership(_ host: NSView, forKey key: String) {
+        if activeOwners[key]?.view === host {
+            activeOwners.removeValue(forKey: key)
+        }
+    }
+    
+    public func isOwner(_ host: NSView, appId: String, accountId: String) -> Bool {
+        let k = key(appId: appId, accountId: accountId)
+        return activeOwners[k]?.view === host
+    }
+    
+    public func isOwner(_ host: NSView, forKey key: String) -> Bool {
+        return activeOwners[key]?.view === host
     }
     
     public func getOrCreateWebView(
@@ -38,6 +66,7 @@ public final class WebKitPool {
     public func removeWebView(appId: String, accountId: String) {
         let k = key(appId: appId, accountId: accountId)
         webViews.removeValue(forKey: k)
+        activeOwners.removeValue(forKey: k)
     }
     
     public func transferWebView(fromAppId: String, toAppId: String, accountId: String) {
@@ -46,14 +75,17 @@ public final class WebKitPool {
         if let existing = webViews.removeValue(forKey: fromKey) {
             webViews[toKey] = existing
         }
+        activeOwners.removeValue(forKey: fromKey)
     }
     
     public func clearAccount(accountId: String) {
         webViews = webViews.filter { !$0.key.hasSuffix("_\(accountId)") }
+        activeOwners = activeOwners.filter { !$0.key.hasSuffix("_\(accountId)") }
     }
     
     public func clearAll() {
         webViews.removeAll()
+        activeOwners.removeAll()
     }
     
     /// Returns all currently pooled WKWebView instances across apps and accounts.

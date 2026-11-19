@@ -16,7 +16,7 @@ public struct ContentView: View {
                 } else if let app = state.selectedApp {
                     // MARK: - App View Container (Everything, Essentials [Default], Minimalist ["At a glance"])
                     WorkspaceAppContainer(app: app, state: state, showingSettings: $state.showingSettings)
-                        .id(state.isMultitaskingActive ? "multitasking_active" : app.id)
+                        .id(state.activeAccountId)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     // MARK: - Home Launcher View with Sidebar
