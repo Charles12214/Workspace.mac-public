@@ -15,7 +15,7 @@ if [ ! -d "$APP_BUNDLE" ]; then
     exit 1
 fi
 
-VERSION="1.3.1"
+VERSION="1.3.1.1"
 DMG_NAME="Workspace.mac-${VERSION}.dmg"
 PKG_NAME="Workspace.mac-${VERSION}.pkg"
 VOL_NAME="Workspace.mac"

@@ -1552,10 +1552,18 @@ public struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 }
                 HStack(spacing: 8) {
-                    Text("v1.3.1 (Current)")
+                    Text("v1.3.1")
+                        .font(.system(size: 11.5, weight: .bold))
+                        .foregroundStyle(.secondary)
+                    Text("— Google Slides offline compatibility & idle power optimization")
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(.secondary)
+                }
+                HStack(spacing: 8) {
+                    Text("v1.3.1.1 (Current)")
                         .font(.system(size: 11.5, weight: .bold))
                         .foregroundStyle(Color(hex: "34A853"))
-                    Text("— Google Slides offline compatibility & idle power optimization")
+                    Text("— Fixes double-character typing glitch & multitasking split-screen loading")
                         .font(.system(size: 11.5))
                         .foregroundStyle(.secondary)
                 }
